@@ -110,4 +110,5 @@ ${XILINX_IP}/ddr4_core/tb/microblaze_mcs_0.sv
 --sourcelibdir ${HDK_COMMON_DIR}/verif/models/ddr4_rdimm_wrapper
 
 # ${HDK_COMMON_DIR}/verif/models/ddr4_rdimm_wrapper/ddr4_rdimm_wrapper.sv
-${HDK_COMMON_DIR}/verif/models/ddr4_model/ddr4_sdram_model_wrapper.sv
+
+# ${HDK_COMMON_DIR}/verif/models/ddr4_model/ddr4_sdram_model_wrapper.sv

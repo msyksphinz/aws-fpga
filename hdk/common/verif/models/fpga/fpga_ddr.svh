@@ -156,6 +156,8 @@
    assign CLK_300M_DIMM3_DP =  ddr_clk;
    assign CLK_300M_DIMM3_DN = ~ddr_clk;
 
+`ifndef __MSYKSPHINZ_USE_DDR4__
+
 `ifndef QUESTA_SIM
   `ifndef IES_SIM
    //------------------------------------------------------
@@ -482,3 +484,5 @@
                                   .bfunc(),
                                   .vddspd());
 
+
+`endif // __MSYKSPHINZ_USE_DDR4__

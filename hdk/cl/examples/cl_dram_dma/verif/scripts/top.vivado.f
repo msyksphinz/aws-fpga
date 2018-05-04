@@ -14,6 +14,7 @@
 # limitations under the License.
 
 --define VIVADO_SIM
+--define __MSYKSPHINZ_USE_DDR4__
 
 --sourcelibext .v
 --sourcelibext .sv
