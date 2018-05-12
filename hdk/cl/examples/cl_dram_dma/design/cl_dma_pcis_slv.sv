@@ -150,7 +150,24 @@ lib_pipe #(.WIDTH(1), .STAGES(4)) SLR2_PIPE_RST_N (.clk(aclk), .rst_n(1'b1), .in
        .m_axi_rready  (sh_cl_dma_pcis_q.rready)
    );
 
+   always @ (negedge aclk) begin
+	  if (sh_cl_dma_pcis_q.awvalid & sh_cl_dma_pcis_q.awready) begin
+		 $display ("%t : [sh_cl_dma AW] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   sh_cl_dma_pcis_q.awlen, sh_cl_dma_pcis_q.awsize, sh_cl_dma_pcis_q.awaddr);
+	  end
+	  if (sh_cl_dma_pcis_q.arvalid & sh_cl_dma_pcis_q.arready) begin
+		 $display ("%t : [sh_cl_dma AR] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   sh_cl_dma_pcis_q.arlen, sh_cl_dma_pcis_q.arsize, sh_cl_dma_pcis_q.araddr);
+	  end
+	  if (sh_cl_dma_pcis_q.wvalid & sh_cl_dma_pcis_q.wready) begin
+		 $display ("%t : [sh_cl_dma  W] STB=%x DATA=%x", $time, sh_cl_dma_pcis_q.wstrb, sh_cl_dma_pcis_q.wdata);
+	  end
+	  if (sh_cl_dma_pcis_q.rvalid & sh_cl_dma_pcis_q.rready) begin
+		 $display ("%t : [sh_cl_dma  R] DATA=%x", $time, sh_cl_dma_pcis_q.rdata);
+	  end
+   end // always @ (negedge aclk)
 
+   
 //---------------------------- 
 // axi interconnect for DDR address decodes 
 //---------------------------- 
