@@ -13,15 +13,27 @@
 # implied. See the License for the specific language governing permissions and
 # limitations under the License.
 
-set curr_wave [current_wave_config]
-if { [string length $curr_wave] == 0 } {
-  if { [llength [get_objects]] > 0} {
-    add_wave /
-    set_property needs_save false [current_wave_config]
-  } else {
-     send_msg_id Add_Wave-1 WARNING "No top level signals found. Simulator will start without a wave window. If you want to open a wave window go to 'File->New Waveform Configuration' or type 'create_wave_config' in the TCL console."
-  }
-}
 
-run 200 us 
-# quit
+INCLUDES = -I$(SDK_DIR)/userspace/include
+
+CC = gcc
+CFLAGS = -DCONFIG_LOGLEVEL=4 -std=gnu99 -g -Wall -Werror $(INCLUDES)
+
+LDLIBS = -lfpga_mgmt -lrt -lpthread
+
+SRC = test_dram_dma.c
+OBJ = $(SRC:.c=.o)
+BIN = test_dram_dma
+
+all: check_env $(BIN)
+
+$(BIN): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+clean:
+	rm -f *.o $(BIN)
+
+check_env:
+ifndef SDK_DIR
+    $(error SDK_DIR is undefined. Try "source sdk_setup.sh" to set the software environment)
+endif
