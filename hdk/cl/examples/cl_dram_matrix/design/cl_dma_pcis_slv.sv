@@ -418,6 +418,24 @@ lib_pipe #(.WIDTH(1), .STAGES(4)) SLR2_PIPE_RST_N (.clk(aclk), .rst_n(1'b1), .in
         .S01_AXI_wstrb(cl_axi_mstr_bus.wstrb),
         .S01_AXI_wvalid(cl_axi_mstr_bus.wvalid));
 
+   always @ (negedge aclk) begin
+	  if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
+		 $display ("%t : [cl_axi_mstr AW] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   cl_axi_mstr_bus.awlen, cl_axi_mstr_bus.awsize, cl_axi_mstr_bus.awaddr);
+	  end
+	  if (cl_axi_mstr_bus.arvalid & cl_axi_mstr_bus.arready) begin
+		 $display ("%t : [cl_axi_mstr AR] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   cl_axi_mstr_bus.arlen, cl_axi_mstr_bus.arsize, cl_axi_mstr_bus.araddr);
+	  end
+	  if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
+		 $display ("%t : [cl_axi_mstr  W] STB=%x DATA=%x", $time, cl_axi_mstr_bus.wstrb, cl_axi_mstr_bus.wdata);
+	  end
+	  if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+		 $display ("%t : [cl_axi_mstr  R] DATA=%x", $time, cl_axi_mstr_bus.rdata);
+	  end
+   end // always @ (negedge aclk)
+
+
 //---------------------------- 
 // flop the output of interconnect for DDRC 
 //---------------------------- 
