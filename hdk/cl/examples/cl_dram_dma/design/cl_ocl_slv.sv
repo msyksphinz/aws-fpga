@@ -78,6 +78,23 @@ axi_bus_t sh_ocl_bus_q();
     .m_axi_rready  (sh_ocl_bus_q.rready)
    );
 
+always @ (negedge clk) begin
+  if (sh_ocl_bus_q.awvalid & sh_ocl_bus_q.awready) begin
+	$display ("%t : [sh_ocl_bus_q AW] LEN=%d SIZE=%d ADDR=%x", $time, 
+			  sh_ocl_bus_q.awlen, sh_ocl_bus_q.awsize, sh_ocl_bus_q.awaddr);
+  end
+  if (sh_ocl_bus_q.arvalid & sh_ocl_bus_q.arready) begin
+	$display ("%t : [sh_ocl_bus_q AR] LEN=%d SIZE=%d ADDR=%x", $time, 
+			  sh_ocl_bus_q.arlen, sh_ocl_bus_q.arsize, sh_ocl_bus_q.araddr);
+  end
+  if (sh_ocl_bus_q.wvalid & sh_ocl_bus_q.wready) begin
+	$display ("%t : [sh_ocl_bus_q  W] STB=%x DATA=%x", $time, sh_ocl_bus_q.wstrb, sh_ocl_bus_q.wdata);
+  end
+  if (sh_ocl_bus_q.rvalid & sh_ocl_bus_q.rready) begin
+	$display ("%t : [sh_ocl_bus_q  R] DATA=%x", $time, sh_ocl_bus_q.rdata);
+  end
+end // always @ (negedge clk)
+
 
 //-------------------------------------------------
 // Slave state machine (accesses from PCIe on BAR0 for CL registers)
@@ -307,30 +324,60 @@ assign pcim_tst_cfg_bus.wdata = slv_tst_wdata[0];
 assign pcim_tst_cfg_bus.wr = slv_tst_wr[0];
 assign pcim_tst_cfg_bus.rd = slv_tst_rd[0];
 
+always @ (negedge clk) begin
+  if (pcim_tst_cfg_bus.wr) $display ("%t : pcim_tst_cfg_bus WriteRequest ADDR=%x", $time, pcim_tst_cfg_bus.addr);
+  if (pcim_tst_cfg_bus.rd) $display ("%t : pcim_tst_cfg_bus ReadRequest  ADDR=%x", $time, pcim_tst_cfg_bus.addr);
+end
+
 assign ddra_tst_cfg_bus.addr = slv_tst_addr[1];
 assign ddra_tst_cfg_bus.wdata = slv_tst_wdata[1];
 assign ddra_tst_cfg_bus.wr = slv_tst_wr[1];
 assign ddra_tst_cfg_bus.rd = slv_tst_rd[1];
+
+always @ (negedge clk) begin
+  if (ddra_tst_cfg_bus.wr) $display ("%t : ddra_tst_cfg_bus WriteRequest ADDR=%x", $time, ddra_tst_cfg_bus.addr);
+  if (ddra_tst_cfg_bus.rd) $display ("%t : ddra_tst_cfg_bus ReadRequest  ADDR=%x", $time, ddra_tst_cfg_bus.addr);
+end
 
 assign ddrb_tst_cfg_bus.addr = slv_tst_addr[2];
 assign ddrb_tst_cfg_bus.wdata = slv_tst_wdata[2];
 assign ddrb_tst_cfg_bus.wr = slv_tst_wr[2];
 assign ddrb_tst_cfg_bus.rd = slv_tst_rd[2];
 
+always @ (negedge clk) begin
+  if (ddrb_tst_cfg_bus.wr) $display ("%t : ddrb_tst_cfg_bus WriteRequest ADDR=%x", $time, ddrb_tst_cfg_bus.addr);
+  if (ddrb_tst_cfg_bus.rd) $display ("%t : ddrb_tst_cfg_bus ReadRequest  ADDR=%x", $time, ddrb_tst_cfg_bus.addr);
+end
+
 assign ddrc_tst_cfg_bus.addr = slv_tst_addr[3];
 assign ddrc_tst_cfg_bus.wdata = slv_tst_wdata[3];
 assign ddrc_tst_cfg_bus.wr = slv_tst_wr[3];
 assign ddrc_tst_cfg_bus.rd = slv_tst_rd[3];
+
+always @ (negedge clk) begin
+  if (ddrc_tst_cfg_bus.wr) $display ("%t : ddrc_tst_cfg_bus WriteRequest ADDR=%x", $time, ddrc_tst_cfg_bus.addr);
+  if (ddrc_tst_cfg_bus.rd) $display ("%t : ddrc_tst_cfg_bus ReadRequest  ADDR=%x", $time, ddrc_tst_cfg_bus.addr);
+end
 
 assign ddrd_tst_cfg_bus.addr = slv_tst_addr[4];
 assign ddrd_tst_cfg_bus.wdata = slv_tst_wdata[4];
 assign ddrd_tst_cfg_bus.wr = slv_tst_wr[4];
 assign ddrd_tst_cfg_bus.rd = slv_tst_rd[4];
 
+always @ (negedge clk) begin
+  if (ddrd_tst_cfg_bus.wr) $display ("%t : ddrd_tst_cfg_bus WriteRequest ADDR=%x", $time, ddrd_tst_cfg_bus.addr);
+  if (ddrd_tst_cfg_bus.rd) $display ("%t : ddrd_tst_cfg_bus ReadRequest  ADDR=%x", $time, ddrd_tst_cfg_bus.addr);
+end
+
 assign axi_mstr_cfg_bus.addr = slv_tst_addr[5];
 assign axi_mstr_cfg_bus.wdata = slv_tst_wdata[5];
 assign axi_mstr_cfg_bus.wr = slv_tst_wr[5];
 assign axi_mstr_cfg_bus.rd = slv_tst_rd[5];
+
+always @ (negedge clk) begin
+  if (axi_mstr_cfg_bus.wr) $display ("%t : axi_mstr_cfg_bus WriteRequest ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+  if (axi_mstr_cfg_bus.rd) $display ("%t : axi_mstr_cfg_bus ReadRequest  ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+end
 
 assign int_tst_cfg_bus.addr = slv_tst_addr[13];
 assign int_tst_cfg_bus.wdata = slv_tst_wdata[13];
