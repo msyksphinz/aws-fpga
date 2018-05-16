@@ -25,18 +25,19 @@ int fail;
 logic [3:0] status;
 
 //transfer1 - length less than 64 byte.
-int         len0 = 17;
-//transfer2 - length between 64 and 256 bytes.
-int         len1 = 128;
-//transfer3 - length greater than 4k bytes.
-int         len2 = 6000;
-//transfer4 - length between 256 and 512 bytes.
-int         len3 = 300;
+int         matrix_size = 256 * 4;
+
 logic       ddr_ready;
 logic       rdata;
 
+logic [31: 0] datasets1[255: 0];
+logic [31: 0] datasets2[255: 0];
 
-
+initial begin
+  $readmemh ("datasets1.txt", datasets1);
+  $readmemh ("datasets2.txt", datasets2);
+end
+  
 initial begin
 
 logic [63:0] host_memory_buffer_address;
@@ -66,54 +67,60 @@ logic [63:0] host_memory_buffer_address;
   host_memory_buffer_address = 64'h0;
 
   //Queue data to be transfered to CL DDR
-  tb.que_buffer_to_cl(.chan(0), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0000_1f00), .len(len0) ); // move buffer to DDR 0
+  tb.que_buffer_to_cl(.chan(0), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0004_0000_0000), .len(matrix_size) ); // move buffer to DDR 0
 
   // Put test pattern in host memory
-  for (int i = 0 ; i < len0 ; i++) begin
-    tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hAA));
-    host_memory_buffer_address++;
+  for (int i = 0 ; i < matrix_size / 4 ; i++) begin
+    tb.hm_put_byte(.addr(host_memory_buffer_address+0), .d(datasets1[i][ 7: 0]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+1), .d(datasets1[i][15: 8]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+2), .d(datasets1[i][23:16]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+3), .d(datasets1[i][31:24]));
+    host_memory_buffer_address+=4;
   end
 
-  host_memory_buffer_address = 64'h0_0000_3000;
-
-  tb.que_buffer_to_cl(.chan(1), .src_addr(host_memory_buffer_address), .cl_addr(64'h0004_0000_0000), .len(len1) ); // move buffer to DDR 1
-
-  for (int i = 0 ; i < len1 ; i++) begin
-    tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hBB));
-    host_memory_buffer_address++;
+  host_memory_buffer_address = 64'h0_0001_0000;
+  
+  tb.que_buffer_to_cl(.chan(0), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0004_0001_0000), .len(matrix_size) );  // move buffer to DDR 1
+  
+  for (int i = 0 ; i < matrix_size / 4 ; i++) begin
+    tb.hm_put_byte(.addr(host_memory_buffer_address+0), .d(datasets2[i][ 7: 0]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+1), .d(datasets2[i][15: 8]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+2), .d(datasets2[i][23:16]));
+    tb.hm_put_byte(.addr(host_memory_buffer_address+3), .d(datasets2[i][31:24]));
+    host_memory_buffer_address+=4;
   end
-
-  host_memory_buffer_address = 64'h0_0000_6000;
-  tb.que_buffer_to_cl(.chan(2), .src_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move buffer to DDR 2
-
-  for (int i = 0 ; i < len2 ; i++) begin
-    tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hCC));
-    host_memory_buffer_address++;
-  end
-
-  host_memory_buffer_address = 64'h0_0000_9000;
-  tb.que_buffer_to_cl(.chan(3), .src_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move buffer to DDR 3
-
-  for (int i = 0 ; i < len3 ; i++) begin
-    tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hDD));
-    host_memory_buffer_address++;
-  end
+  
+  // host_memory_buffer_address = 64'h0_0000_6000;
+  // tb.que_buffer_to_cl(.chan(2), .src_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move buffer to DDR 2
+  // 
+  // for (int i = 0 ; i < len2 ; i++) begin
+  //   tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hCC));
+  //   host_memory_buffer_address++;
+  // end
+  // 
+  // host_memory_buffer_address = 64'h0_0000_9000;
+  // tb.que_buffer_to_cl(.chan(3), .src_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move buffer to DDR 3
+  // 
+  // for (int i = 0 ; i < len3 ; i++) begin
+  //   tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hDD));
+  //   host_memory_buffer_address++;
+  // end
 
   $display("[%t] : starting H2C DMA channels ", $realtime);
 
   //Start transfers of data to CL DDR
   tb.start_que_to_cl(.chan(0));
-  tb.start_que_to_cl(.chan(1));
-  tb.start_que_to_cl(.chan(2));
-  tb.start_que_to_cl(.chan(3));
+  // tb.start_que_to_cl(.chan(1));
+  // tb.start_que_to_cl(.chan(2));
+  // tb.start_que_to_cl(.chan(3));
 
   // wait for dma transfers to complete
   timeout_count = 0;
   do begin
     status[0] = tb.is_dma_to_cl_done(.chan(0));
-    status[1] = tb.is_dma_to_cl_done(.chan(1));
-    status[2] = tb.is_dma_to_cl_done(.chan(2));
-    status[3] = tb.is_dma_to_cl_done(.chan(3));
+    // status[1] = tb.is_dma_to_cl_done(.chan(1));
+    // status[2] = tb.is_dma_to_cl_done(.chan(2));
+    // status[3] = tb.is_dma_to_cl_done(.chan(3));
     #10ns;
     timeout_count++;
   end while ((status != 4'hf) && (timeout_count < 4000));
@@ -126,34 +133,34 @@ logic [63:0] host_memory_buffer_address;
   $display("[%t] : starting C2H DMA channels ", $realtime);
 
   // read the data from cl and put it in the host memory
-  host_memory_buffer_address = 64'h0_0001_0800;
-  tb.que_cl_to_buffer(.chan(0), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0000_0000_1f00), .len(len0) ); // move DDR0 to buffer
-
-  host_memory_buffer_address = 64'h0_0002_1800;
-  tb.que_cl_to_buffer(.chan(1), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0004_0000_0000), .len(len1) ); // move DDR1 to buffer
-
-  host_memory_buffer_address = 64'h0_0003_2800;
-  tb.que_cl_to_buffer(.chan(2), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move DDR2 to buffer
-
-  host_memory_buffer_address = 64'h0_0004_3800;
-  tb.que_cl_to_buffer(.chan(3), .dst_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move DDR3 to buffer
+  // host_memory_buffer_address = 64'h0_0001_0800;
+  // tb.que_cl_to_buffer(.chan(0), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0000_0000_1f00), .len(len0) ); // move DDR0 to buffer
+  // 
+  // host_memory_buffer_address = 64'h0_0002_1800;
+  // tb.que_cl_to_buffer(.chan(1), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0004_0000_0000), .len(len1) ); // move DDR1 to buffer
+  // 
+  // host_memory_buffer_address = 64'h0_0003_2800;
+  // tb.que_cl_to_buffer(.chan(2), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move DDR2 to buffer
+  // 
+  // host_memory_buffer_address = 64'h0_0004_3800;
+  // tb.que_cl_to_buffer(.chan(3), .dst_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move DDR3 to buffer
 
   //Start transfers of data from CL DDR
-  tb.start_que_to_buffer(.chan(0));
-  tb.start_que_to_buffer(.chan(1));
-  tb.start_que_to_buffer(.chan(2));
-  tb.start_que_to_buffer(.chan(3));
+  // tb.start_que_to_buffer(.chan(0));
+  // tb.start_que_to_buffer(.chan(1));
+  // tb.start_que_to_buffer(.chan(2));
+  // tb.start_que_to_buffer(.chan(3));
 
   // wait for dma transfers to complete
-  timeout_count = 0;
-  do begin
-    status[0] = tb.is_dma_to_buffer_done(.chan(0));
-    status[1] = tb.is_dma_to_buffer_done(.chan(1));
-    status[2] = tb.is_dma_to_buffer_done(.chan(2));
-    status[3] = tb.is_dma_to_buffer_done(.chan(3));
-    #10ns;
-    timeout_count++;
-  end while ((status != 4'hf) && (timeout_count < 1000));
+  // timeout_count = 0;
+  // do begin
+  //   status[0] = tb.is_dma_to_buffer_done(.chan(0));
+  //   status[1] = tb.is_dma_to_buffer_done(.chan(1));
+  //   status[2] = tb.is_dma_to_buffer_done(.chan(2));
+  //   status[3] = tb.is_dma_to_buffer_done(.chan(3));
+  //   #10ns;
+  //   timeout_count++;
+  // end while ((status != 4'hf) && (timeout_count < 1000));
 
   if (timeout_count >= 1000) begin
     $display("[%t] : *** ERROR *** Timeout waiting for dma transfers from cl", $realtime);

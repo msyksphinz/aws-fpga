@@ -292,44 +292,81 @@ cl_dma_pcis_slv #(.SCRB_BURST_LEN_MINUS1(DDR_SCRB_BURST_LEN_MINUS1),
   );
 
 
+logic [ 1: 0] state;
+localparam state_init = 2'b00;
+localparam state_row  = 2'b01;
+localparam state_col  = 2'b10;
+logic [ 5: 0] col_counter;
+
 always_ff @(posedge clk) begin
-   if (!pipe_rst_n) begin
+  if (!pipe_rst_n) begin
+	cl_axi_mstr_bus.awvalid <= 1'b0;
+	cl_axi_mstr_bus.arvalid <= 1'b0;
+	cl_axi_mstr_bus.rready  <= 1'b1;
+	cl_axi_mstr_bus.wvalid  <= 1'b0;
+	cl_axi_mstr_bus.araddr  <= 64'h0;
+    state <= state_init;
+    col_counter <= 6'h0;
+  end else begin
+    case (state)
+      state_init: begin
+	    if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00 &&
+		    !cl_axi_mstr_bus.arvalid) begin
+	  	  cl_axi_mstr_bus.arvalid <= 1'b1;
+	  	  cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0000_0000;
+		  cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
+		  cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
+		  cl_axi_mstr_bus.arsize  <= 3'b111;                    // Always 128 bytes
+	    end
+	    if (cl_axi_mstr_bus.arvalid && cl_axi_mstr_bus.arready) begin 
+		  cl_axi_mstr_bus.arvalid <= 1'b0;
+          state <= state_row;
+	    end
+      end
+      state_row: begin
+	  	cl_axi_mstr_bus.arvalid <= 1'b1;
+	  	cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0001_0004;
+		cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
+		cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
+		cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
+        state <= state_col;
+      end
+      state_col: begin
+        if (cl_axi_mstr_bus.arready) begin
+          if (col_counter <= 15) begin
+	  	    cl_axi_mstr_bus.arvalid <= 1'b1;
+	  	    cl_axi_mstr_bus.araddr  <= cl_axi_mstr_bus.araddr + 64;  // Proceed 64-byte
+            state <= state_col;
+            col_counter <= col_counter + 6'h1;
+          end else begin
+            cl_axi_mstr_bus.arvalid <= 1'b0;
+            state <= state_init;
+          end
+		  cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
+		  cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
+		  cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
+        end // if (cl_axi_mstr_bus.arready)
+      end // case: state_col
+    endcase // case (state)
+	
+	if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h04 &&
+		!cl_axi_mstr_bus.awvalid) begin
+	  cl_axi_mstr_bus.awvalid <= 1'b1;
+	  cl_axi_mstr_bus.awaddr  <= 64'h0000_0004_0000_0000;
+	  cl_axi_mstr_bus.wvalid  <= 1'b1;
+	  cl_axi_mstr_bus.wdata   <= {256'h00000000_00000001_00000002_00000003_00000004_00000005_00000006_00000007,
+								  256'h00000008_00000009_0000000A_0000000B_0000000C_0000000D_0000000E_0000000F};
+	  cl_axi_mstr_bus.awlen   <= 8'h00;                     // Always 1 burst
+	  cl_axi_mstr_bus.awsize  <= 3'b010;                    // Always 4 bytes
+	  cl_axi_mstr_bus.awid    <= 16'b0;                     // Only 1 outstanding command
+	end
+	if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
 	  cl_axi_mstr_bus.awvalid <= 1'b0;
-	  cl_axi_mstr_bus.arvalid <= 1'b0;
-	  cl_axi_mstr_bus.rready  <= 1'b1;
+	end
+	if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
 	  cl_axi_mstr_bus.wvalid  <= 1'b0;
-	  cl_axi_mstr_bus.araddr  <= 64'h0;
-   end else begin
-	  if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00 &&
-		  !cl_axi_mstr_bus.arvalid) begin
-	  	 cl_axi_mstr_bus.arvalid <= 1'b1;
-	  	 cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0000_0000;
-		 cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
-		 cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
-		 cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
-	  end
-	  if (cl_axi_mstr_bus.arvalid && cl_axi_mstr_bus.arready) begin 
-		 cl_axi_mstr_bus.arvalid <= 1'b0;
-	  end
-	  
-	  if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h04 &&
-		  !cl_axi_mstr_bus.awvalid) begin
-		 cl_axi_mstr_bus.awvalid <= 1'b1;
-		 cl_axi_mstr_bus.awaddr  <= 64'h0000_0004_0000_0000;
-		 cl_axi_mstr_bus.wvalid  <= 1'b1;
-		 cl_axi_mstr_bus.wdata   <= {256'h00000000_00000001_00000002_00000003_00000004_00000005_00000006_00000007,
-									 256'h00000008_00000009_0000000A_0000000B_0000000C_0000000D_0000000E_0000000F};
-		 cl_axi_mstr_bus.awlen   <= 8'h00;                     // Always 1 burst
-		 cl_axi_mstr_bus.awsize  <= 3'b010;                    // Always 4 bytes
-		 cl_axi_mstr_bus.awid    <= 16'b0;                     // Only 1 outstanding command
-	  end
-	  if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
-		 cl_axi_mstr_bus.awvalid <= 1'b0;
-	  end
-	  if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
-		 cl_axi_mstr_bus.wvalid  <= 1'b0;
-	  end
-   end // else: !if(!pipe_rst_n)
+	end
+  end // else: !if(!pipe_rst_n)
 end // always_ff @
    
   
