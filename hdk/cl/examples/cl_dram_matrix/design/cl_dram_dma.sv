@@ -291,6 +291,72 @@ cl_dma_pcis_slv #(.SCRB_BURST_LEN_MINUS1(DDR_SCRB_BURST_LEN_MINUS1),
     .cl_sh_ddr_bus     (cl_sh_ddr_bus)
   );
 
+
+always_ff @(posedge clk) begin
+   if (!pipe_rst_n) begin
+	  cl_axi_mstr_bus.awvalid <= 1'b0;
+	  cl_axi_mstr_bus.arvalid <= 1'b0;
+	  cl_axi_mstr_bus.rready  <= 1'b1;
+	  cl_axi_mstr_bus.wvalid  <= 1'b0;
+	  cl_axi_mstr_bus.araddr  <= 64'h0;
+   end else begin
+	  if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00 &&
+		  !cl_axi_mstr_bus.arvalid) begin
+	  	 cl_axi_mstr_bus.arvalid <= 1'b1;
+	  	 cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0000_0000;
+		 cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
+		 cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
+		 cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
+	  end
+	  if (cl_axi_mstr_bus.arvalid && cl_axi_mstr_bus.arready) begin 
+		 cl_axi_mstr_bus.arvalid <= 1'b0;
+	  end
+	  
+	  if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h04 &&
+		  !cl_axi_mstr_bus.awvalid) begin
+		 cl_axi_mstr_bus.awvalid <= 1'b1;
+		 cl_axi_mstr_bus.awaddr  <= 64'h0000_0004_0000_0000;
+		 cl_axi_mstr_bus.wvalid  <= 1'b1;
+		 cl_axi_mstr_bus.wdata   <= {256'h00000000_00000001_00000002_00000003_00000004_00000005_00000006_00000007,
+									 256'h00000008_00000009_0000000A_0000000B_0000000C_0000000D_0000000E_0000000F};
+		 cl_axi_mstr_bus.awlen   <= 8'h00;                     // Always 1 burst
+		 cl_axi_mstr_bus.awsize  <= 3'b010;                    // Always 4 bytes
+		 cl_axi_mstr_bus.awid    <= 16'b0;                     // Only 1 outstanding command
+	  end
+	  if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
+		 cl_axi_mstr_bus.awvalid <= 1'b0;
+	  end
+	  if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
+		 cl_axi_mstr_bus.wvalid  <= 1'b0;
+	  end
+   end // else: !if(!pipe_rst_n)
+end // always_ff @
+   
+  
+   always @ (negedge clk) begin
+	  if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
+		 $display ("%t : [cl_axi_mstr_bus AW] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   cl_axi_mstr_bus.awlen, cl_axi_mstr_bus.awsize, cl_axi_mstr_bus.awaddr);
+	  end
+	  if (cl_axi_mstr_bus.arvalid & cl_axi_mstr_bus.arready) begin
+		 $display ("%t : [cl_axi_mstr_bus AR] LEN=%d SIZE=%d ADDR=%x", $time, 
+				   cl_axi_mstr_bus.arlen, cl_axi_mstr_bus.arsize, cl_axi_mstr_bus.araddr);
+	  end
+	  if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
+		 $display ("%t : [cl_axi_mstr_bus  W] STB=%x DATA=%x", $time, cl_axi_mstr_bus.wstrb, cl_axi_mstr_bus.wdata);
+	  end
+	  if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+		 $display ("%t : [cl_axi_mstr_bus  R] DATA=%x", $time, cl_axi_mstr_bus.rdata);
+	  end
+   end // always @ (negedge clk)
+
+
+   always @ (negedge clk) begin
+	  if (axi_mstr_cfg_bus.wr) $display ("%t : [axi_mstr_cfg_bus W] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+	  if (axi_mstr_cfg_bus.rd) $display ("%t : [axi_mstr_cfg_bus R] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+   end // always @ (negedge clk)
+
+
 ///////////////////////////////////////////////////////////////////////
 ///////////////// DMA PCIS SLAVE module ///////////////////////////////
 ///////////////////////////////////////////////////////////////////////
@@ -298,12 +364,12 @@ cl_dma_pcis_slv #(.SCRB_BURST_LEN_MINUS1(DDR_SCRB_BURST_LEN_MINUS1),
 ///////////////////////////////////////////////////////////////////////
 ///////////////// Secondary AXI Master module /////////////////////////
 ///////////////////////////////////////////////////////////////////////
-cl_dram_dma_axi_mstr  CL_DRAM_DMA_AXI_MSTR (
-    .aclk(clk),
-    .aresetn(dma_pcis_slv_sync_rst_n),
-    .cl_axi_mstr_bus(cl_axi_mstr_bus),
-    .axi_mstr_cfg_bus(axi_mstr_cfg_bus)
-  );
+// cl_dram_dma_axi_mstr  CL_DRAM_DMA_AXI_MSTR (
+//     .aclk(clk),
+//     .aresetn(dma_pcis_slv_sync_rst_n),
+//     .cl_axi_mstr_bus(cl_axi_mstr_bus),
+//     .axi_mstr_cfg_bus(axi_mstr_cfg_bus)
+//   );
 
 ///////////////////////////////////////////////////////////////////////
 ///////////////// Secondary AXI Master module /////////////////////////
