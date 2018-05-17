@@ -80,7 +80,7 @@ logic [63:0] host_memory_buffer_address;
 
   host_memory_buffer_address = 64'h0_0001_0000;
   
-  tb.que_buffer_to_cl(.chan(0), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0004_0001_0000), .len(matrix_size) );  // move buffer to DDR 1
+  tb.que_buffer_to_cl(.chan(1), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0004_0001_0000), .len(matrix_size) );  // move buffer to DDR 1
   
   for (int i = 0 ; i < matrix_size / 4 ; i++) begin
     tb.hm_put_byte(.addr(host_memory_buffer_address+0), .d(datasets2[i][ 7: 0]));
@@ -110,7 +110,7 @@ logic [63:0] host_memory_buffer_address;
 
   //Start transfers of data to CL DDR
   tb.start_que_to_cl(.chan(0));
-  // tb.start_que_to_cl(.chan(1));
+  tb.start_que_to_cl(.chan(1));
   // tb.start_que_to_cl(.chan(2));
   // tb.start_que_to_cl(.chan(3));
 
@@ -118,7 +118,7 @@ logic [63:0] host_memory_buffer_address;
   timeout_count = 0;
   do begin
     status[0] = tb.is_dma_to_cl_done(.chan(0));
-    // status[1] = tb.is_dma_to_cl_done(.chan(1));
+    status[1] = tb.is_dma_to_cl_done(.chan(1));
     // status[2] = tb.is_dma_to_cl_done(.chan(2));
     // status[3] = tb.is_dma_to_cl_done(.chan(3));
     #10ns;

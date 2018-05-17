@@ -333,7 +333,7 @@ always_ff @(posedge clk) begin
       end
       state_col: begin
         if (cl_axi_mstr_bus.arready) begin
-          if (col_counter <= 15) begin
+          if (col_counter < 15) begin
 	  	    cl_axi_mstr_bus.arvalid <= 1'b1;
 	  	    cl_axi_mstr_bus.araddr  <= cl_axi_mstr_bus.araddr + 64;  // Proceed 64-byte
             state <= state_col;
@@ -369,29 +369,100 @@ always_ff @(posedge clk) begin
   end // else: !if(!pipe_rst_n)
 end // always_ff @
    
+
+logic [31: 0] matrix_row_data[16: 0];
+logic [31: 0] matrix_col_data[16: 0];
+logic         matrix_col_val;
+logic [ 1: 0] rcv_state;
+logic [ 4: 0] rcv_count;
+logic [63: 0] dotp_result;
+logic [63: 0] mul_result;
+
+localparam rcv_state_row = 2'b00;
+localparam rcv_state_col = 2'b01;
+integer       idx;
+always_ff @ (posedge clk) begin
+  if (!pipe_rst_n) begin
+    for (idx = 0; idx < 16; idx=idx+1) begin
+      matrix_row_data[idx] <= 32'h0000_0000;
+      matrix_col_data[idx] <= 32'h0000_0000;
+    end
+    matrix_col_val <= 1'b0;
+    dotp_result <= 64'h0;
+    rcv_state <= rcv_state_row;
+    rcv_count <= 5'h00;
+  end else begin
+	if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00) begin
+      rcv_state <= rcv_state_row;
+    end else begin
+      case (rcv_state)
+        rcv_state_row  : begin
+          if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+            matrix_row_data[0] <= cl_axi_mstr_bus.rdata[ 31:  0];
+            matrix_row_data[1] <= cl_axi_mstr_bus.rdata[ 63: 32];
+            matrix_row_data[2] <= cl_axi_mstr_bus.rdata[ 95: 64];
+            matrix_row_data[3] <= cl_axi_mstr_bus.rdata[127: 96];
+            matrix_row_data[4] <= cl_axi_mstr_bus.rdata[159:128];
+            matrix_row_data[5] <= cl_axi_mstr_bus.rdata[191:160];
+            matrix_row_data[6] <= cl_axi_mstr_bus.rdata[223:192];
+            matrix_row_data[7] <= cl_axi_mstr_bus.rdata[255:224];
+
+            rcv_state <= rcv_state_col;
+            rcv_count <= 5'h00;
+          end
+        end // case: rcv_state_row
+        rcv_state_col : begin
+          if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+            if (rcv_count < 15) begin
+              matrix_col_data[rcv_count] <= cl_axi_mstr_bus.rdata[ 31:  0];
+              matrix_col_val <= 1'b1;
+              rcv_count <= rcv_count + 1;
+            end else begin
+              matrix_col_val <= 1'b0;
+              rcv_count <= 0;
+            end
+            if (matrix_col_val) begin
+              dotp_result = dotp_result + mul_result;
+            end
+          end
+        end // case: rcv_state_col
+      endcase // case (rcv_state)
+    end
+  end // else: !if(!pipe_rst_n)
+end // always_ff @
+
+assign mul_result = {{32{matrix_row_data[rcv_count-1][31]}}, matrix_row_data[rcv_count-1]} * {{32{matrix_col_data[rcv_count-1][31]}}, matrix_col_data[rcv_count-1]};
+
+always_ff @ (negedge clk) begin
+  if (rcv_state == rcv_state_col) begin
+    if (cl_axi_mstr_bus.rvalid && cl_axi_mstr_bus.rready && (rcv_count == 15)) begin
+	  $display ("%t : [matrix] result = %08x", $time, dotp_result);
+    end
+  end
+end
   
-   always @ (negedge clk) begin
-	  if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
-		 $display ("%t : [cl_axi_mstr_bus AW] LEN=%d SIZE=%d ADDR=%x", $time, 
+always_ff @ (negedge clk) begin
+  if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
+	$display ("%t : [cl_axi_mstr_bus AW] LEN=%d SIZE=%d ADDR=%x", $time, 
 				   cl_axi_mstr_bus.awlen, cl_axi_mstr_bus.awsize, cl_axi_mstr_bus.awaddr);
-	  end
-	  if (cl_axi_mstr_bus.arvalid & cl_axi_mstr_bus.arready) begin
-		 $display ("%t : [cl_axi_mstr_bus AR] LEN=%d SIZE=%d ADDR=%x", $time, 
+  end
+  if (cl_axi_mstr_bus.arvalid & cl_axi_mstr_bus.arready) begin
+	$display ("%t : [cl_axi_mstr_bus AR] LEN=%d SIZE=%d ADDR=%x", $time, 
 				   cl_axi_mstr_bus.arlen, cl_axi_mstr_bus.arsize, cl_axi_mstr_bus.araddr);
-	  end
-	  if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
-		 $display ("%t : [cl_axi_mstr_bus  W] STB=%x DATA=%x", $time, cl_axi_mstr_bus.wstrb, cl_axi_mstr_bus.wdata);
-	  end
-	  if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-		 $display ("%t : [cl_axi_mstr_bus  R] DATA=%x", $time, cl_axi_mstr_bus.rdata);
-	  end
-   end // always @ (negedge clk)
+  end
+  if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
+	$display ("%t : [cl_axi_mstr_bus  W] STB=%x DATA=%x", $time, cl_axi_mstr_bus.wstrb, cl_axi_mstr_bus.wdata);
+  end
+  if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+	$display ("%t : [cl_axi_mstr_bus  R] DATA=%x", $time, cl_axi_mstr_bus.rdata);
+  end
+end // always @ (negedge clk)
 
 
-   always @ (negedge clk) begin
-	  if (axi_mstr_cfg_bus.wr) $display ("%t : [axi_mstr_cfg_bus W] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
-	  if (axi_mstr_cfg_bus.rd) $display ("%t : [axi_mstr_cfg_bus R] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
-   end // always @ (negedge clk)
+always @ (negedge clk) begin
+  if (axi_mstr_cfg_bus.wr) $display ("%t : [axi_mstr_cfg_bus W] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+  if (axi_mstr_cfg_bus.rd) $display ("%t : [axi_mstr_cfg_bus R] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
+end // always @ (negedge clk)
 
 
 ///////////////////////////////////////////////////////////////////////
