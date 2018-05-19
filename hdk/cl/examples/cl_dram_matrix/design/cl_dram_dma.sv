@@ -301,7 +301,6 @@ logic [ 5: 0] col_counter;
 always_ff @(posedge clk) begin
   if (!pipe_rst_n) begin
 	cl_axi_mstr_bus.arvalid <= 1'b0;
-	cl_axi_mstr_bus.rready  <= 1'b1;
 	cl_axi_mstr_bus.araddr  <= 64'h0;
     state <= state_init;
     col_counter <= 6'h0;
@@ -352,25 +351,22 @@ end // always_ff @
    
 
 logic [31: 0] matrix_row_data[15: 0];
-logic [31: 0] matrix_col_data[15: 0];
 logic         matrix_col_val;
 logic [ 1: 0] rcv_state;
 logic [ 4: 0] rcv_count;
-logic [ 4: 0] calc_count;
-logic [63: 0] dotp_result;
 logic [63: 0] mul_result;
 
-localparam rcv_state_row = 2'b00;
-localparam rcv_state_col = 2'b01;
+localparam rcv_state_row    = 2'b00;
+localparam rcv_state_col    = 2'b01;
+localparam rcv_state_store  = 2'b10;
+localparam rcv_state_store2 = 2'b11;
 integer       idx;
 always_ff @ (posedge clk) begin
   if (!pipe_rst_n) begin
     for (idx = 0; idx < 16; idx=idx+1) begin
       matrix_row_data[idx] <= 32'h0000_0000;
-      matrix_col_data[idx] <= 32'h0000_0000;
     end
     matrix_col_val <= 1'b0;
-    dotp_result <= 64'h0;
     rcv_state <= rcv_state_row;
     rcv_count <= 5'h00;
 
@@ -402,51 +398,113 @@ always_ff @ (posedge clk) begin
 
             rcv_state <= rcv_state_col;
             rcv_count <= 5'h00;
-            calc_count <= 5'h00;
           end
         end // case: rcv_state_row
         rcv_state_col : begin
           if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
+            matrix_col_val <= 1'b1;
             if (rcv_count < 16) begin
-              matrix_col_data[rcv_count] <= cl_axi_mstr_bus.rdata[ 31:  0];
-              matrix_col_val <= 1'b1;
               rcv_count <= rcv_count + 1;
-              rcv_state <= rcv_state_store;
             end else begin
-              matrix_col_val <= 1'b0;
+              rcv_state <= rcv_state_store;
               rcv_count <= 0;
             end
-            if (matrix_col_val) begin
-              dotp_result <= dotp_result + mul_result;
-              calc_count <= calc_count + 5'h01;
-              $display ("%t : [matrix %d] mult = %08x x %08x", $time, calc_count, matrix_row_data[calc_count], matrix_col_data[calc_count]);
-            end
+          end else begin // if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready)
+            matrix_col_val <= 1'b0;
           end // if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready)
         end // case: rcv_state_col
-        rcv_state_state : begin
-          
-	      if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
-	        cl_axi_mstr_bus.awvalid <= 1'b0;
-	      end
-	      if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
-	        cl_axi_mstr_bus.wvalid  <= 1'b0;
-	      end
+        rcv_state_store : begin
+	      cl_axi_mstr_bus.awvalid <= 1'b1;
+		  cl_axi_mstr_bus.wvalid  <= 1'b1;
+		  cl_axi_mstr_bus.awlen   <= 8'h00;   // Always 1 burst
+		  cl_axi_mstr_bus.awsize  <= 3'b010;  // Always 4 bytes
+          cl_axi_mstr_bus.wstrb   <= 4'b0000; // Always lower 32-bit
+          rcv_state <= rcv_state_store2;
+        end
+        rcv_state_store2 : begin
+          if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
+            // Store Complete
+            cl_axi_mstr_bus.awaddr <= cl_axi_mstr_bus.awaddr + 64'h4;
+            rcv_state <= rcv_state_row;
+          end
         end
       endcase // case (rcv_state)
     end
   end // else: !if(!pipe_rst_n)
 end // always_ff @
 
-assign mul_result = {{32{matrix_row_data[rcv_count-1][31]}}, matrix_row_data[rcv_count-1]} * {{32{matrix_col_data[rcv_count-1][31]}}, matrix_col_data[rcv_count-1]};
+logic fifo_wr, fifo_empty;
+assign fifo_wr = cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready;
+logic [63: 0] fifo_rd_data;
+
+fifo u_fifo
+(
+ .CLK   (clk),
+ .nRST  (pipe_rst_n),
+ .D     (cl_axi_mstr_bus.rdata[31:0]),
+ .Q     (fifo_rd_data),
+ .WR    (fifo_wr),
+ .RD    (!fifo_empty),
+ .FULL  (cl_axi_mstr_bus.rready),
+ .EMPTY (fifo_empty)
+ );
+
+
+logic [ 4: 0] calc_count;
+logic [63: 0] dotp_result;
+logic [31: 0] matrix_row_data_in;
+
+always_ff @ (posedge clk) begin
+  if (!pipe_rst_n) begin
+    dotp_result <= 64'h0;
+    calc_count <= 5'h00;
+  end else begin
+    if (!fifo_empty) begin
+      dotp_result <= dotp_result + mul_result;
+      calc_count  <= calc_count  + 5'h01;
+      $display ("%t : [matrix %d] mult = %08x x %08x", $time, 
+                calc_count, 
+                matrix_row_data_in, fifo_rd_data);
+    end
+  end // else: !if(!pipe_rst_n)
+end // always_ff @
+
+
+always_comb begin
+  case (calc_count)
+    4'd00   : matrix_row_data_in = matrix_row_data[ 0];
+    4'd01   : matrix_row_data_in = matrix_row_data[ 1];
+    4'd02   : matrix_row_data_in = matrix_row_data[ 2];
+    4'd03   : matrix_row_data_in = matrix_row_data[ 3];
+    4'd04   : matrix_row_data_in = matrix_row_data[ 4];
+    4'd05   : matrix_row_data_in = matrix_row_data[ 5];
+    4'd06   : matrix_row_data_in = matrix_row_data[ 6];
+    4'd07   : matrix_row_data_in = matrix_row_data[ 7];
+    4'd08   : matrix_row_data_in = matrix_row_data[ 8];
+    4'd09   : matrix_row_data_in = matrix_row_data[ 9];
+    4'd10   : matrix_row_data_in = matrix_row_data[10];
+    4'd11   : matrix_row_data_in = matrix_row_data[11];
+    4'd12   : matrix_row_data_in = matrix_row_data[12];
+    4'd13   : matrix_row_data_in = matrix_row_data[13];
+    4'd14   : matrix_row_data_in = matrix_row_data[14];
+    4'd15   : matrix_row_data_in = matrix_row_data[15];
+    default : matrix_row_data_in = 32'h0000_0000;
+  endcase // case (calc_count)
+end // always_comb
+
+
+assign mul_result = {{32{matrix_row_data_in[31]}}, matrix_row_data_in} * 
+                    {{32{fifo_rd_data[31]}},       fifo_rd_data      };
+
+assign cl_axi_mstr_bus.wdata = dotp_result;
 
 always_ff @ (negedge clk) begin
-  if (rcv_state == rcv_state_col) begin
-    if (calc_count == 16) begin
-	  $display ("%t : [matrix] result = %08x", $time, dotp_result);
-    end
+  if (calc_count == 16) begin
+	$display ("%t : [matrix] result = %016x", $time, dotp_result);
   end
 end
-  
+
+
 always_ff @ (negedge clk) begin
   if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
 	$display ("%t : [cl_axi_mstr_bus AW] LEN=%d SIZE=%d ADDR=%x", $time, 

@@ -70,4 +70,4 @@ ${CL_ROOT}/design/cl_ocl_slv.sv
 ${CL_ROOT}/design/cl_sda_slv.sv
 ${CL_ROOT}/design/cl_dram_dma_axi_mstr.sv
 ${CL_ROOT}/design/cl_dram_dma.sv
-
+${CL_ROOT}/design/fifo.sv
