@@ -300,10 +300,8 @@ logic [ 5: 0] col_counter;
 
 always_ff @(posedge clk) begin
   if (!pipe_rst_n) begin
-	cl_axi_mstr_bus.awvalid <= 1'b0;
 	cl_axi_mstr_bus.arvalid <= 1'b0;
 	cl_axi_mstr_bus.rready  <= 1'b1;
-	cl_axi_mstr_bus.wvalid  <= 1'b0;
 	cl_axi_mstr_bus.araddr  <= 64'h0;
     state <= state_init;
     col_counter <= 6'h0;
@@ -333,7 +331,7 @@ always_ff @(posedge clk) begin
       end
       state_col: begin
         if (cl_axi_mstr_bus.arready) begin
-          if (col_counter < 15) begin
+          if (col_counter < 16) begin
 	  	    cl_axi_mstr_bus.arvalid <= 1'b1;
 	  	    cl_axi_mstr_bus.araddr  <= cl_axi_mstr_bus.araddr + 64;  // Proceed 64-byte
             state <= state_col;
@@ -348,33 +346,17 @@ always_ff @(posedge clk) begin
         end // if (cl_axi_mstr_bus.arready)
       end // case: state_col
     endcase // case (state)
-	
-	if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h04 &&
-		!cl_axi_mstr_bus.awvalid) begin
-	  cl_axi_mstr_bus.awvalid <= 1'b1;
-	  cl_axi_mstr_bus.awaddr  <= 64'h0000_0004_0000_0000;
-	  cl_axi_mstr_bus.wvalid  <= 1'b1;
-	  cl_axi_mstr_bus.wdata   <= {256'h00000000_00000001_00000002_00000003_00000004_00000005_00000006_00000007,
-								  256'h00000008_00000009_0000000A_0000000B_0000000C_0000000D_0000000E_0000000F};
-	  cl_axi_mstr_bus.awlen   <= 8'h00;                     // Always 1 burst
-	  cl_axi_mstr_bus.awsize  <= 3'b010;                    // Always 4 bytes
-	  cl_axi_mstr_bus.awid    <= 16'b0;                     // Only 1 outstanding command
-	end
-	if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
-	  cl_axi_mstr_bus.awvalid <= 1'b0;
-	end
-	if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
-	  cl_axi_mstr_bus.wvalid  <= 1'b0;
-	end
+
   end // else: !if(!pipe_rst_n)
 end // always_ff @
    
 
-logic [31: 0] matrix_row_data[16: 0];
-logic [31: 0] matrix_col_data[16: 0];
+logic [31: 0] matrix_row_data[15: 0];
+logic [31: 0] matrix_col_data[15: 0];
 logic         matrix_col_val;
 logic [ 1: 0] rcv_state;
 logic [ 4: 0] rcv_count;
+logic [ 4: 0] calc_count;
 logic [63: 0] dotp_result;
 logic [63: 0] mul_result;
 
@@ -391,6 +373,9 @@ always_ff @ (posedge clk) begin
     dotp_result <= 64'h0;
     rcv_state <= rcv_state_row;
     rcv_count <= 5'h00;
+
+	cl_axi_mstr_bus.awvalid <= 1'b0;
+	cl_axi_mstr_bus.wvalid  <= 1'b0;
   end else begin
 	if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00) begin
       rcv_state <= rcv_state_row;
@@ -398,34 +383,55 @@ always_ff @ (posedge clk) begin
       case (rcv_state)
         rcv_state_row  : begin
           if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-            matrix_row_data[0] <= cl_axi_mstr_bus.rdata[ 31:  0];
-            matrix_row_data[1] <= cl_axi_mstr_bus.rdata[ 63: 32];
-            matrix_row_data[2] <= cl_axi_mstr_bus.rdata[ 95: 64];
-            matrix_row_data[3] <= cl_axi_mstr_bus.rdata[127: 96];
-            matrix_row_data[4] <= cl_axi_mstr_bus.rdata[159:128];
-            matrix_row_data[5] <= cl_axi_mstr_bus.rdata[191:160];
-            matrix_row_data[6] <= cl_axi_mstr_bus.rdata[223:192];
-            matrix_row_data[7] <= cl_axi_mstr_bus.rdata[255:224];
+            matrix_row_data[ 0] <= cl_axi_mstr_bus.rdata[32* 0+31:32* 0];
+            matrix_row_data[ 1] <= cl_axi_mstr_bus.rdata[32* 1+31:32* 1];
+            matrix_row_data[ 2] <= cl_axi_mstr_bus.rdata[32* 2+31:32* 2];
+            matrix_row_data[ 3] <= cl_axi_mstr_bus.rdata[32* 3+31:32* 3];
+            matrix_row_data[ 4] <= cl_axi_mstr_bus.rdata[32* 4+31:32* 4];
+            matrix_row_data[ 5] <= cl_axi_mstr_bus.rdata[32* 5+31:32* 5];
+            matrix_row_data[ 6] <= cl_axi_mstr_bus.rdata[32* 6+31:32* 6];
+            matrix_row_data[ 7] <= cl_axi_mstr_bus.rdata[32* 7+31:32* 7];
+            matrix_row_data[ 8] <= cl_axi_mstr_bus.rdata[32* 8+31:32* 8];
+            matrix_row_data[ 9] <= cl_axi_mstr_bus.rdata[32* 9+31:32* 9];
+            matrix_row_data[10] <= cl_axi_mstr_bus.rdata[32*10+31:32*10];
+            matrix_row_data[11] <= cl_axi_mstr_bus.rdata[32*11+31:32*11];
+            matrix_row_data[12] <= cl_axi_mstr_bus.rdata[32*12+31:32*12];
+            matrix_row_data[13] <= cl_axi_mstr_bus.rdata[32*13+31:32*13];
+            matrix_row_data[14] <= cl_axi_mstr_bus.rdata[32*14+31:32*14];
+            matrix_row_data[15] <= cl_axi_mstr_bus.rdata[32*15+31:32*15];
 
             rcv_state <= rcv_state_col;
             rcv_count <= 5'h00;
+            calc_count <= 5'h00;
           end
         end // case: rcv_state_row
         rcv_state_col : begin
           if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-            if (rcv_count < 15) begin
+            if (rcv_count < 16) begin
               matrix_col_data[rcv_count] <= cl_axi_mstr_bus.rdata[ 31:  0];
               matrix_col_val <= 1'b1;
               rcv_count <= rcv_count + 1;
+              rcv_state <= rcv_state_store;
             end else begin
               matrix_col_val <= 1'b0;
               rcv_count <= 0;
             end
             if (matrix_col_val) begin
-              dotp_result = dotp_result + mul_result;
+              dotp_result <= dotp_result + mul_result;
+              calc_count <= calc_count + 5'h01;
+              $display ("%t : [matrix %d] mult = %08x x %08x", $time, calc_count, matrix_row_data[calc_count], matrix_col_data[calc_count]);
             end
-          end
+          end // if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready)
         end // case: rcv_state_col
+        rcv_state_state : begin
+          
+	      if (cl_axi_mstr_bus.awvalid && cl_axi_mstr_bus.awready) begin
+	        cl_axi_mstr_bus.awvalid <= 1'b0;
+	      end
+	      if (cl_axi_mstr_bus.wvalid && cl_axi_mstr_bus.wready) begin
+	        cl_axi_mstr_bus.wvalid  <= 1'b0;
+	      end
+        end
       endcase // case (rcv_state)
     end
   end // else: !if(!pipe_rst_n)
@@ -435,7 +441,7 @@ assign mul_result = {{32{matrix_row_data[rcv_count-1][31]}}, matrix_row_data[rcv
 
 always_ff @ (negedge clk) begin
   if (rcv_state == rcv_state_col) begin
-    if (cl_axi_mstr_bus.rvalid && cl_axi_mstr_bus.rready && (rcv_count == 15)) begin
+    if (calc_count == 16) begin
 	  $display ("%t : [matrix] result = %08x", $time, dotp_result);
     end
   end
