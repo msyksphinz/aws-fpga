@@ -433,9 +433,12 @@ always_ff @ (posedge clk) begin
   end // else: !if(!pipe_rst_n)
 end // always_ff @
 
-logic fifo_wr, fifo_empty;
-assign fifo_wr = cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready;
+logic fifo_wr, fifo_empty, fifo_full;
+assign fifo_wr = (rcv_state == rcv_state_col) & 
+                 cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready;
 logic [63: 0] fifo_rd_data;
+
+assign cl_axi_mstr_bus.rready = !fifo_full;
 
 fifo u_fifo
 (
@@ -445,19 +448,27 @@ fifo u_fifo
  .Q     (fifo_rd_data),
  .WR    (fifo_wr),
  .RD    (!fifo_empty),
- .FULL  (cl_axi_mstr_bus.rready),
+ .FULL  (fifo_full),
  .EMPTY (fifo_empty)
  );
 
+always_ff @ (negedge clk) begin
+  if (cl_axi_mstr_bus.rvalid) begin
+    $display ("%t : [Waiting] rvalid = %d, rready = %d", 
+              $time, cl_axi_mstr_bus.rvalid, cl_axi_mstr_bus.rready);
+  end
+end
 
 logic [ 4: 0] calc_count;
 logic [63: 0] dotp_result;
 logic [31: 0] matrix_row_data_in;
+logic         mult_vld;
 
 always_ff @ (posedge clk) begin
   if (!pipe_rst_n) begin
     dotp_result <= 64'h0;
     calc_count <= 5'h00;
+    mult_vld  <= 1'b0;
   end else begin
     if (!fifo_empty) begin
       dotp_result <= dotp_result + mul_result;

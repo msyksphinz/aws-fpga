@@ -2,22 +2,24 @@
 //##module FIFO
 //---------------------------------------------------------------------------
 module fifo
-  (
-   input logic              CLK,
-   input logic              nRST,
-   input logic [width-1:0]  D,
-   output logic [width-1:0] Q,
-   input logic              WR,
-   input logic              RD,
-   output logic             FULL,
-   output logic             EMPTY
-   );
+  #(
+	parameter width   = 32,              // Data bus width
+	parameter widthad = 4                // Address bus width
+	)
+   (
+	input logic 			 CLK,
+	input logic 			 nRST,
+	input logic [width-1:0]  D,
+	output logic [width-1:0] Q,
+	input logic 			 WR,
+	input logic 			 RD,
+	output logic 			 FULL,
+	output logic 			 EMPTY
+	);
 //---------------------------------------------------------------------------
 //#parameter
 //---------------------------------------------------------------------------
-parameter width       = 32;              // Data bus width
-parameter widthad     = 4;               // Address bus width
-parameter numwords    = 2**widthad;      // Number of words  2^lpm_widthad
+localparam numwords = 2**widthad;      // Number of words  2^lpm_widthad
 
 //---------------------------------------------------------------------------
 //#wire
