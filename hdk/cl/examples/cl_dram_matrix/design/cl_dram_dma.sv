@@ -1,3 +1,5 @@
+`default_nettype none
+
 // Amazon FPGA Hardware Development Kit
 //
 // Copyright 2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -13,7 +15,7 @@
 // implied. See the License for the specific language governing permissions and
 // limitations under the License.
 
-module cl_dram_dma #(parameter NUM_DDR=4) 
+module cl_dram_dma #(parameter NUM_DDR=4)
 
 (
    `include "cl_ports.vh"
@@ -36,7 +38,7 @@ module cl_dram_dma #(parameter NUM_DDR=4)
 // needed to close timing for the various
 // place where ATG (Automatic Test Generator)
 // is defined
-   
+
    localparam NUM_CFG_STGS_CL_DDR_ATG = 8;
    localparam NUM_CFG_STGS_SH_DDR_ATG = 4;
    localparam NUM_CFG_STGS_PCIE_ATG = 4;
@@ -46,8 +48,8 @@ module cl_dram_dma #(parameter NUM_DDR=4)
 
 `ifdef SIM
    localparam DDR_SCRB_MAX_ADDR = 64'h1FFF;
-`else   
-   localparam DDR_SCRB_MAX_ADDR = 64'h3FFFFFFFF; //16GB 
+`else
+   localparam DDR_SCRB_MAX_ADDR = 64'h3FFFFFFFF; //16GB
 `endif
    localparam DDR_SCRB_BURST_LEN_MINUS1 = 15;
 
@@ -55,11 +57,11 @@ module cl_dram_dma #(parameter NUM_DDR=4)
    localparam NO_SCRB_INST = 1;
 `else
    localparam NO_SCRB_INST = 0;
-`endif   
+`endif
 
-//---------------------------- 
+//----------------------------
 // Internal signals
-//---------------------------- 
+//----------------------------
 axi_bus_t lcl_cl_sh_ddra();
 axi_bus_t lcl_cl_sh_ddrb();
 axi_bus_t lcl_cl_sh_ddrd();
@@ -103,7 +105,7 @@ logic [2:0] lcl_sh_cl_ddr_is_ready;
 logic dbg_scrb_en;
 logic [2:0] dbg_scrb_mem_sel;
 
-//---------------------------- 
+//----------------------------
 // End Internal signals
 //----------------------------
 
@@ -111,7 +113,7 @@ assign clk = clk_main_a0;
 
 //reset synchronizer
 lib_pipe #(.WIDTH(1), .STAGES(4)) PIPE_RST_N (.clk(clk), .rst_n(1'b1), .in_bus(rst_main_n), .out_bus(pipe_rst_n));
-   
+
 always_ff @(negedge pipe_rst_n or posedge clk)
    if (!pipe_rst_n)
    begin
@@ -124,7 +126,7 @@ always_ff @(negedge pipe_rst_n or posedge clk)
       sync_rst_n <= pre_sync_rst_n;
    end
 
-//FLR response 
+//FLR response
 always_ff @(negedge sync_rst_n or posedge clk)
    if (!sync_rst_n)
    begin
@@ -143,7 +145,7 @@ always_ff @(negedge sync_rst_n or posedge clk)
 
 // Bit 31: Debug enable (for cl_sh_id0 and cl_sh_id1)
 // Bit 30:28: Debug Scrb memory select
-   
+
 // Bit 3 : DDRC Scrub enable
 // Bit 2 : DDRD Scrub enable
 // Bit 1 : DDRB Scrub enable
@@ -172,7 +174,7 @@ always_ff @(posedge clk)
     cl_sh_id0 <= dbg_scrb_en ? (dbg_scrb_mem_sel == 3'd3 ? ddrc_scrb_bus.addr[31:0] :
                                 dbg_scrb_mem_sel == 3'd2 ? ddrd_scrb_bus.addr[31:0] :
                                 dbg_scrb_mem_sel == 3'd1 ? ddrb_scrb_bus.addr[31:0] : ddra_scrb_bus.addr[31:0]) :
-                                `CL_SH_ID0; 
+                                `CL_SH_ID0;
 always_ff @(posedge clk)
     cl_sh_id1 <= dbg_scrb_en ? (dbg_scrb_mem_sel == 3'd3 ? ddrc_scrb_bus.addr[63:32] :
                                 dbg_scrb_mem_sel == 3'd2 ? ddrd_scrb_bus.addr[63:32] :
@@ -188,7 +190,7 @@ always_ff @(posedge clk or negedge sync_rst_n)
   else
   begin
     sh_cl_ddr_is_ready_q <= sh_cl_ddr_is_ready;
-  end  
+  end
 
 assign all_ddr_is_ready = {lcl_sh_cl_ddr_is_ready[2], sh_cl_ddr_is_ready_q, lcl_sh_cl_ddr_is_ready[1:0]};
 
@@ -203,7 +205,7 @@ assign all_ddr_scrb_done = {ddrc_scrb_bus.done, ddrd_scrb_bus.done, ddrb_scrb_bu
 ///////////////////////////////////////////////////////////////////////
 ///////////////// DMA PCIS SLAVE module ///////////////////////////////
 ///////////////////////////////////////////////////////////////////////
- 
+
 assign sh_cl_dma_pcis_bus.awvalid = sh_cl_dma_pcis_awvalid;
 assign sh_cl_dma_pcis_bus.awaddr = sh_cl_dma_pcis_awaddr;
 assign sh_cl_dma_pcis_bus.awid[5:0] = sh_cl_dma_pcis_awid;
@@ -292,252 +294,14 @@ cl_dma_pcis_slv #(.SCRB_BURST_LEN_MINUS1(DDR_SCRB_BURST_LEN_MINUS1),
   );
 
 
-logic [ 1: 0] state;
-localparam state_init = 2'b00;
-localparam state_row  = 2'b01;
-localparam state_col  = 2'b10;
-logic [ 5: 0] col_counter;
-
-always_ff @(posedge clk) begin
-  if (!pipe_rst_n) begin
-	cl_axi_mstr_bus.arvalid <= 1'b0;
-	cl_axi_mstr_bus.araddr  <= 64'h0;
-    state <= state_init;
-    col_counter <= 6'h0;
-  end else begin
-    case (state)
-      state_init: begin
-	    if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00 &&
-		    !cl_axi_mstr_bus.arvalid) begin
-	  	  cl_axi_mstr_bus.arvalid <= 1'b1;
-	  	  cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0000_0000;
-		  cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
-		  cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
-		  cl_axi_mstr_bus.arsize  <= 3'b111;                    // Always 128 bytes
-	    end
-	    if (cl_axi_mstr_bus.arvalid && cl_axi_mstr_bus.arready) begin 
-		  cl_axi_mstr_bus.arvalid <= 1'b0;
-          state <= state_row;
-	    end
-      end
-      state_row: begin
-	  	cl_axi_mstr_bus.arvalid <= 1'b1;
-	  	cl_axi_mstr_bus.araddr  <= 64'h0000_0004_0001_0004;
-		cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
-		cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
-		cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
-        state <= state_col;
-      end
-      state_col: begin
-        if (cl_axi_mstr_bus.arready) begin
-          if (col_counter < 16) begin
-	  	    cl_axi_mstr_bus.arvalid <= 1'b1;
-	  	    cl_axi_mstr_bus.araddr  <= cl_axi_mstr_bus.araddr + 64;  // Proceed 64-byte
-            state <= state_col;
-            col_counter <= col_counter + 6'h1;
-          end else begin
-            cl_axi_mstr_bus.arvalid <= 1'b0;
-            state <= state_init;
-          end
-		  cl_axi_mstr_bus.arid    <= 16'b0;                     // Only 1 outstanding command
-		  cl_axi_mstr_bus.arlen   <= 8'h00;                     // Always 1 burst
-		  cl_axi_mstr_bus.arsize  <= 3'b010;                    // Always 4 bytes
-        end // if (cl_axi_mstr_bus.arready)
-      end // case: state_col
-    endcase // case (state)
-
-  end // else: !if(!pipe_rst_n)
-end // always_ff @
-   
-
-logic [31: 0] matrix_row_data[15: 0];
-logic         matrix_col_val;
-logic [ 1: 0] rcv_state;
-logic [ 4: 0] rcv_count;
-logic [63: 0] mul_result;
-
-localparam rcv_state_row    = 2'b00;
-localparam rcv_state_col    = 2'b01;
-localparam rcv_state_store  = 2'b10;
-localparam rcv_state_store2 = 2'b11;
-integer       idx;
-always_ff @ (posedge clk) begin
-  if (!pipe_rst_n) begin
-    for (idx = 0; idx < 16; idx=idx+1) begin
-      matrix_row_data[idx] <= 32'h0000_0000;
-    end
-    matrix_col_val <= 1'b0;
-    rcv_state <= rcv_state_row;
-    rcv_count <= 5'h00;
-
-	cl_axi_mstr_bus.awvalid <= 1'b0;
-	cl_axi_mstr_bus.wvalid  <= 1'b0;
-  end else begin
-	if (axi_mstr_cfg_bus.wr && axi_mstr_cfg_bus.addr[ 7: 0] == 8'h00) begin
-      rcv_state <= rcv_state_row;
-    end else begin
-      case (rcv_state)
-        rcv_state_row  : begin
-          if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-            matrix_row_data[ 0] <= cl_axi_mstr_bus.rdata[32* 0+31:32* 0];
-            matrix_row_data[ 1] <= cl_axi_mstr_bus.rdata[32* 1+31:32* 1];
-            matrix_row_data[ 2] <= cl_axi_mstr_bus.rdata[32* 2+31:32* 2];
-            matrix_row_data[ 3] <= cl_axi_mstr_bus.rdata[32* 3+31:32* 3];
-            matrix_row_data[ 4] <= cl_axi_mstr_bus.rdata[32* 4+31:32* 4];
-            matrix_row_data[ 5] <= cl_axi_mstr_bus.rdata[32* 5+31:32* 5];
-            matrix_row_data[ 6] <= cl_axi_mstr_bus.rdata[32* 6+31:32* 6];
-            matrix_row_data[ 7] <= cl_axi_mstr_bus.rdata[32* 7+31:32* 7];
-            matrix_row_data[ 8] <= cl_axi_mstr_bus.rdata[32* 8+31:32* 8];
-            matrix_row_data[ 9] <= cl_axi_mstr_bus.rdata[32* 9+31:32* 9];
-            matrix_row_data[10] <= cl_axi_mstr_bus.rdata[32*10+31:32*10];
-            matrix_row_data[11] <= cl_axi_mstr_bus.rdata[32*11+31:32*11];
-            matrix_row_data[12] <= cl_axi_mstr_bus.rdata[32*12+31:32*12];
-            matrix_row_data[13] <= cl_axi_mstr_bus.rdata[32*13+31:32*13];
-            matrix_row_data[14] <= cl_axi_mstr_bus.rdata[32*14+31:32*14];
-            matrix_row_data[15] <= cl_axi_mstr_bus.rdata[32*15+31:32*15];
-
-            rcv_state <= rcv_state_col;
-            rcv_count <= 5'h00;
-          end
-        end // case: rcv_state_row
-        rcv_state_col : begin
-          if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-            matrix_col_val <= 1'b1;
-            if (rcv_count < 16) begin
-              rcv_count <= rcv_count + 1;
-            end else begin
-              rcv_state <= rcv_state_store;
-              rcv_count <= 0;
-            end
-          end else begin // if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready)
-            matrix_col_val <= 1'b0;
-          end // if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready)
-        end // case: rcv_state_col
-        rcv_state_store : begin
-	      cl_axi_mstr_bus.awvalid <= 1'b1;
-		  cl_axi_mstr_bus.wvalid  <= 1'b1;
-		  cl_axi_mstr_bus.awlen   <= 8'h00;   // Always 1 burst
-		  cl_axi_mstr_bus.awsize  <= 3'b010;  // Always 4 bytes
-          cl_axi_mstr_bus.wstrb   <= 4'b0000; // Always lower 32-bit
-          rcv_state <= rcv_state_store2;
-        end
-        rcv_state_store2 : begin
-          if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
-            // Store Complete
-            cl_axi_mstr_bus.awaddr <= cl_axi_mstr_bus.awaddr + 64'h4;
-            rcv_state <= rcv_state_row;
-          end
-        end
-      endcase // case (rcv_state)
-    end
-  end // else: !if(!pipe_rst_n)
-end // always_ff @
-
-logic fifo_wr, fifo_empty, fifo_full;
-assign fifo_wr = (rcv_state == rcv_state_col) & 
-                 cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready;
-logic [63: 0] fifo_rd_data;
-
-assign cl_axi_mstr_bus.rready = !fifo_full;
-
-fifo u_fifo
-(
- .CLK   (clk),
- .nRST  (pipe_rst_n),
- .D     (cl_axi_mstr_bus.rdata[31:0]),
- .Q     (fifo_rd_data),
- .WR    (fifo_wr),
- .RD    (!fifo_empty),
- .FULL  (fifo_full),
- .EMPTY (fifo_empty)
- );
-
-always_ff @ (negedge clk) begin
-  if (cl_axi_mstr_bus.rvalid) begin
-    $display ("%t : [Waiting] rvalid = %d, rready = %d", 
-              $time, cl_axi_mstr_bus.rvalid, cl_axi_mstr_bus.rready);
-  end
-end
-
-logic [ 4: 0] calc_count;
-logic [63: 0] dotp_result;
-logic [31: 0] matrix_row_data_in;
-logic         mult_vld;
-
-always_ff @ (posedge clk) begin
-  if (!pipe_rst_n) begin
-    dotp_result <= 64'h0;
-    calc_count <= 5'h00;
-    mult_vld  <= 1'b0;
-  end else begin
-    if (!fifo_empty) begin
-      dotp_result <= dotp_result + mul_result;
-      calc_count  <= calc_count  + 5'h01;
-      $display ("%t : [matrix %d] mult = %08x x %08x", $time, 
-                calc_count, 
-                matrix_row_data_in, fifo_rd_data);
-    end
-  end // else: !if(!pipe_rst_n)
-end // always_ff @
-
-
-always_comb begin
-  case (calc_count)
-    4'd00   : matrix_row_data_in = matrix_row_data[ 0];
-    4'd01   : matrix_row_data_in = matrix_row_data[ 1];
-    4'd02   : matrix_row_data_in = matrix_row_data[ 2];
-    4'd03   : matrix_row_data_in = matrix_row_data[ 3];
-    4'd04   : matrix_row_data_in = matrix_row_data[ 4];
-    4'd05   : matrix_row_data_in = matrix_row_data[ 5];
-    4'd06   : matrix_row_data_in = matrix_row_data[ 6];
-    4'd07   : matrix_row_data_in = matrix_row_data[ 7];
-    4'd08   : matrix_row_data_in = matrix_row_data[ 8];
-    4'd09   : matrix_row_data_in = matrix_row_data[ 9];
-    4'd10   : matrix_row_data_in = matrix_row_data[10];
-    4'd11   : matrix_row_data_in = matrix_row_data[11];
-    4'd12   : matrix_row_data_in = matrix_row_data[12];
-    4'd13   : matrix_row_data_in = matrix_row_data[13];
-    4'd14   : matrix_row_data_in = matrix_row_data[14];
-    4'd15   : matrix_row_data_in = matrix_row_data[15];
-    default : matrix_row_data_in = 32'h0000_0000;
-  endcase // case (calc_count)
-end // always_comb
-
-
-assign mul_result = {{32{matrix_row_data_in[31]}}, matrix_row_data_in} * 
-                    {{32{fifo_rd_data[31]}},       fifo_rd_data      };
-
-assign cl_axi_mstr_bus.wdata = dotp_result;
-
-always_ff @ (negedge clk) begin
-  if (calc_count == 16) begin
-	$display ("%t : [matrix] result = %016x", $time, dotp_result);
-  end
-end
-
-
-always_ff @ (negedge clk) begin
-  if (cl_axi_mstr_bus.awvalid & cl_axi_mstr_bus.awready) begin
-	$display ("%t : [cl_axi_mstr_bus AW] LEN=%d SIZE=%d ADDR=%x", $time, 
-				   cl_axi_mstr_bus.awlen, cl_axi_mstr_bus.awsize, cl_axi_mstr_bus.awaddr);
-  end
-  if (cl_axi_mstr_bus.arvalid & cl_axi_mstr_bus.arready) begin
-	$display ("%t : [cl_axi_mstr_bus AR] LEN=%d SIZE=%d ADDR=%x", $time, 
-				   cl_axi_mstr_bus.arlen, cl_axi_mstr_bus.arsize, cl_axi_mstr_bus.araddr);
-  end
-  if (cl_axi_mstr_bus.wvalid & cl_axi_mstr_bus.wready) begin
-	$display ("%t : [cl_axi_mstr_bus  W] STB=%x DATA=%x", $time, cl_axi_mstr_bus.wstrb, cl_axi_mstr_bus.wdata);
-  end
-  if (cl_axi_mstr_bus.rvalid & cl_axi_mstr_bus.rready) begin
-	$display ("%t : [cl_axi_mstr_bus  R] DATA=%x", $time, cl_axi_mstr_bus.rdata);
-  end
-end // always @ (negedge clk)
-
-
-always @ (negedge clk) begin
-  if (axi_mstr_cfg_bus.wr) $display ("%t : [axi_mstr_cfg_bus W] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
-  if (axi_mstr_cfg_bus.rd) $display ("%t : [axi_mstr_cfg_bus R] ADDR=%x", $time, axi_mstr_cfg_bus.addr);
-end // always @ (negedge clk)
+cl_dram_matrix_calc
+  u_cl_dram_matrix_calc
+    (
+     .clk    (clk),
+     .rst_n  (dma_pcis_slv_sync_rst_n),
+     .axi_if (cl_axi_mstr_bus),
+     .cfg_if (axi_mstr_cfg_bus)
+     );
 
 
 ///////////////////////////////////////////////////////////////////////
@@ -653,12 +417,12 @@ cl_ocl_slv CL_OCL_SLV (
 ///////////////// OCL SLAVE module ////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-//----------------------------------------- 
-// DDR controller instantiation   
+//-----------------------------------------
+// DDR controller instantiation
 //-----------------------------------------
 logic [7:0] sh_ddr_stat_addr_q[2:0];
 logic[2:0] sh_ddr_stat_wr_q;
-logic[2:0] sh_ddr_stat_rd_q; 
+logic[2:0] sh_ddr_stat_rd_q;
 logic[31:0] sh_ddr_stat_wdata_q[2:0];
 logic[2:0] ddr_sh_stat_ack_q;
 logic[31:0] ddr_sh_stat_rdata_q[2:0];
@@ -697,9 +461,9 @@ lib_pipe #(.WIDTH(1+1+8+32), .STAGES(NUM_CFG_STGS_CL_DDR_ATG)) PIPE_DDR_STAT2 (.
 lib_pipe #(.WIDTH(1+8+32), .STAGES(NUM_CFG_STGS_CL_DDR_ATG)) PIPE_DDR_STAT_ACK2 (.clk(clk), .rst_n(sync_rst_n),
                                                .in_bus({ddr_sh_stat_ack_q[2], ddr_sh_stat_int_q[2], ddr_sh_stat_rdata_q[2]}),
                                                .out_bus({ddr_sh_stat_ack2, ddr_sh_stat_int2, ddr_sh_stat_rdata2})
-                                               ); 
+                                               );
 
-//convert to 2D 
+//convert to 2D
 logic[15:0] cl_sh_ddr_awid_2d[2:0];
 logic[63:0] cl_sh_ddr_awaddr_2d[2:0];
 logic[7:0] cl_sh_ddr_awlen_2d[2:0];
@@ -801,8 +565,8 @@ sh_ddr #(
    .M_A_DQS_DP(M_A_DQS_DP),
    .M_A_DQS_DN(M_A_DQS_DN),
    .cl_RST_DIMM_A_N(cl_RST_DIMM_A_N),
-   
-   
+
+
    .CLK_300M_DIMM1_DP(CLK_300M_DIMM1_DP),
    .CLK_300M_DIMM1_DN(CLK_300M_DIMM1_DN),
    .M_B_ACT_N(M_B_ACT_N),
@@ -878,42 +642,42 @@ sh_ddr #(
    .sh_cl_ddr_is_ready(lcl_sh_cl_ddr_is_ready),
 
    .sh_ddr_stat_addr0  (sh_ddr_stat_addr_q[0]) ,
-   .sh_ddr_stat_wr0    (sh_ddr_stat_wr_q[0]     ) , 
-   .sh_ddr_stat_rd0    (sh_ddr_stat_rd_q[0]     ) , 
-   .sh_ddr_stat_wdata0 (sh_ddr_stat_wdata_q[0]  ) , 
+   .sh_ddr_stat_wr0    (sh_ddr_stat_wr_q[0]     ) ,
+   .sh_ddr_stat_rd0    (sh_ddr_stat_rd_q[0]     ) ,
+   .sh_ddr_stat_wdata0 (sh_ddr_stat_wdata_q[0]  ) ,
    .ddr_sh_stat_ack0   (ddr_sh_stat_ack_q[0]    ) ,
    .ddr_sh_stat_rdata0 (ddr_sh_stat_rdata_q[0]  ),
    .ddr_sh_stat_int0   (ddr_sh_stat_int_q[0]    ),
 
    .sh_ddr_stat_addr1  (sh_ddr_stat_addr_q[1]) ,
-   .sh_ddr_stat_wr1    (sh_ddr_stat_wr_q[1]     ) , 
-   .sh_ddr_stat_rd1    (sh_ddr_stat_rd_q[1]     ) , 
-   .sh_ddr_stat_wdata1 (sh_ddr_stat_wdata_q[1]  ) , 
+   .sh_ddr_stat_wr1    (sh_ddr_stat_wr_q[1]     ) ,
+   .sh_ddr_stat_rd1    (sh_ddr_stat_rd_q[1]     ) ,
+   .sh_ddr_stat_wdata1 (sh_ddr_stat_wdata_q[1]  ) ,
    .ddr_sh_stat_ack1   (ddr_sh_stat_ack_q[1]    ) ,
    .ddr_sh_stat_rdata1 (ddr_sh_stat_rdata_q[1]  ),
    .ddr_sh_stat_int1   (ddr_sh_stat_int_q[1]    ),
 
    .sh_ddr_stat_addr2  (sh_ddr_stat_addr_q[2]) ,
-   .sh_ddr_stat_wr2    (sh_ddr_stat_wr_q[2]     ) , 
-   .sh_ddr_stat_rd2    (sh_ddr_stat_rd_q[2]     ) , 
-   .sh_ddr_stat_wdata2 (sh_ddr_stat_wdata_q[2]  ) , 
+   .sh_ddr_stat_wr2    (sh_ddr_stat_wr_q[2]     ) ,
+   .sh_ddr_stat_rd2    (sh_ddr_stat_rd_q[2]     ) ,
+   .sh_ddr_stat_wdata2 (sh_ddr_stat_wdata_q[2]  ) ,
    .ddr_sh_stat_ack2   (ddr_sh_stat_ack_q[2]    ) ,
    .ddr_sh_stat_rdata2 (ddr_sh_stat_rdata_q[2]  ),
-   .ddr_sh_stat_int2   (ddr_sh_stat_int_q[2]    ) 
+   .ddr_sh_stat_int2   (ddr_sh_stat_int_q[2]    )
    );
 
-//----------------------------------------- 
-// DDR controller instantiation   
+//-----------------------------------------
+// DDR controller instantiation
 //-----------------------------------------
 
 
-//----------------------------------------- 
-// Interrrupt example  
+//-----------------------------------------
+// Interrrupt example
 //-----------------------------------------
 
 (* dont_touch = "true" *) logic int_slv_sync_rst_n;
 lib_pipe #(.WIDTH(1), .STAGES(4)) INT_SLV_SLC_RST_N (.clk(clk), .rst_n(1'b1), .in_bus(sync_rst_n), .out_bus(int_slv_sync_rst_n));
-cl_int_slv CL_INT_TST 
+cl_int_slv CL_INT_TST
 (
   .clk                 (clk),
   .rst_n               (int_slv_sync_rst_n),
@@ -922,15 +686,15 @@ cl_int_slv CL_INT_TST
 
   .cl_sh_apppf_irq_req (cl_sh_apppf_irq_req),
   .sh_cl_apppf_irq_ack (sh_cl_apppf_irq_ack)
-       
+
 );
 
-//----------------------------------------- 
-// Interrrupt example  
+//-----------------------------------------
+// Interrrupt example
 //-----------------------------------------
 
-//----------------------------------------- 
-// SDA SLAVE module 
+//-----------------------------------------
+// SDA SLAVE module
 //-----------------------------------------
 
 
@@ -958,17 +722,17 @@ cl_sda_slv CL_SDA_SLV (
 
   .aclk(clk),
   .aresetn(sda_slv_sync_rst_n),
-  
+
   .sda_cl_bus(sda_cl_bus)
 );
 
-//----------------------------------------- 
-// SDA SLAVE module 
+//-----------------------------------------
+// SDA SLAVE module
 //-----------------------------------------
 
 
-//----------------------------------------- 
-// Virtual JTAG ILA Debug core example 
+//-----------------------------------------
+// Virtual JTAG ILA Debug core example
 //-----------------------------------------
 
 
@@ -990,7 +754,7 @@ cl_sda_slv CL_SDA_SLV (
    .capture(capture),
    .bscanid_en(bscanid_en),
    .sh_cl_dma_pcis_q(sh_cl_dma_pcis_q),
-`ifndef DDR_A_ABSENT   
+`ifndef DDR_A_ABSENT
    .lcl_cl_sh_ddra(lcl_cl_sh_ddra)
 `else
    .lcl_cl_sh_ddra(axi_bus_tied)
@@ -1006,8 +770,8 @@ cl_vio CL_VIO (
 
 `endif //  `ifndef DISABLE_VJTAG_DEBUG
 
-//----------------------------------------- 
-// Virtual JATG ILA Debug core example 
+//-----------------------------------------
+// Virtual JATG ILA Debug core example
 //-----------------------------------------
 // tie off for ILA port when probing block not present
    assign axi_bus_tied.awvalid = 1'b0 ;
@@ -1043,4 +807,6 @@ cl_vio CL_VIO (
      assign cl_sh_pcim_aruser = 18'h0;
 
 
-endmodule   
+endmodule
+
+`default_nettype wire

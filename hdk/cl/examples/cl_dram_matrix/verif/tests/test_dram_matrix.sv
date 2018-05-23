@@ -37,7 +37,7 @@ initial begin
   $readmemh ("datasets1.txt", datasets1);
   $readmemh ("datasets2.txt", datasets2);
 end
-  
+
 initial begin
 
 logic [63:0] host_memory_buffer_address;
@@ -79,9 +79,9 @@ logic [63:0] host_memory_buffer_address;
   end
 
   host_memory_buffer_address = 64'h0_0001_0000;
-  
+
   tb.que_buffer_to_cl(.chan(1), .src_addr(host_memory_buffer_address), .cl_addr(64'h0000_0004_0001_0000), .len(matrix_size) );  // move buffer to DDR 1
-  
+
   for (int i = 0 ; i < matrix_size / 4 ; i++) begin
     tb.hm_put_byte(.addr(host_memory_buffer_address+0), .d(datasets2[i][ 7: 0]));
     tb.hm_put_byte(.addr(host_memory_buffer_address+1), .d(datasets2[i][15: 8]));
@@ -89,22 +89,6 @@ logic [63:0] host_memory_buffer_address;
     tb.hm_put_byte(.addr(host_memory_buffer_address+3), .d(datasets2[i][31:24]));
     host_memory_buffer_address+=4;
   end
-  
-  // host_memory_buffer_address = 64'h0_0000_6000;
-  // tb.que_buffer_to_cl(.chan(2), .src_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move buffer to DDR 2
-  // 
-  // for (int i = 0 ; i < len2 ; i++) begin
-  //   tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hCC));
-  //   host_memory_buffer_address++;
-  // end
-  // 
-  // host_memory_buffer_address = 64'h0_0000_9000;
-  // tb.que_buffer_to_cl(.chan(3), .src_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move buffer to DDR 3
-  // 
-  // for (int i = 0 ; i < len3 ; i++) begin
-  //   tb.hm_put_byte(.addr(host_memory_buffer_address), .d(8'hDD));
-  //   host_memory_buffer_address++;
-  // end
 
   $display("[%t] : starting H2C DMA channels ", $realtime);
 
@@ -130,38 +114,6 @@ logic [63:0] host_memory_buffer_address;
     error_count++;
   end
 
-  $display("[%t] : starting C2H DMA channels ", $realtime);
-
-  // read the data from cl and put it in the host memory
-  // host_memory_buffer_address = 64'h0_0001_0800;
-  // tb.que_cl_to_buffer(.chan(0), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0000_0000_1f00), .len(len0) ); // move DDR0 to buffer
-  // 
-  // host_memory_buffer_address = 64'h0_0002_1800;
-  // tb.que_cl_to_buffer(.chan(1), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0004_0000_0000), .len(len1) ); // move DDR1 to buffer
-  // 
-  // host_memory_buffer_address = 64'h0_0003_2800;
-  // tb.que_cl_to_buffer(.chan(2), .dst_addr(host_memory_buffer_address), .cl_addr(64'h0008_0000_0000), .len(len2) ); // move DDR2 to buffer
-  // 
-  // host_memory_buffer_address = 64'h0_0004_3800;
-  // tb.que_cl_to_buffer(.chan(3), .dst_addr(host_memory_buffer_address), .cl_addr(64'h000C_0000_0000), .len(len3) ); // move DDR3 to buffer
-
-  //Start transfers of data from CL DDR
-  // tb.start_que_to_buffer(.chan(0));
-  // tb.start_que_to_buffer(.chan(1));
-  // tb.start_que_to_buffer(.chan(2));
-  // tb.start_que_to_buffer(.chan(3));
-
-  // wait for dma transfers to complete
-  // timeout_count = 0;
-  // do begin
-  //   status[0] = tb.is_dma_to_buffer_done(.chan(0));
-  //   status[1] = tb.is_dma_to_buffer_done(.chan(1));
-  //   status[2] = tb.is_dma_to_buffer_done(.chan(2));
-  //   status[3] = tb.is_dma_to_buffer_done(.chan(3));
-  //   #10ns;
-  //   timeout_count++;
-  // end while ((status != 4'hf) && (timeout_count < 1000));
-
   if (timeout_count >= 1000) begin
     $display("[%t] : *** ERROR *** Timeout waiting for dma transfers from cl", $realtime);
     error_count++;
@@ -169,126 +121,58 @@ logic [63:0] host_memory_buffer_address;
 
   #1us;
 
-  $display ("Writing 0xDEAD_BEEF to address 0x%x", `HELLO_WORLD_REG_ADDR);
-  tb.poke(.addr(`HELLO_WORLD_REG_ADDR), .data(32'hDEAD_BEEF), .size(DataSize::UINT16), .intf(AxiPort::PORT_OCL)); // write register
+  calc_dot_product (64'h00000004_00000000, 64'h00000004_00010000, 64'h00000004_00020000);
+  calc_dot_product (64'h00000004_00000000, 64'h00000004_00010004, 64'h00000004_00020008);
+  calc_dot_product (64'h00000004_00000000, 64'h00000004_00010008, 64'h00000004_00020010);
+  calc_dot_product (64'h00000004_00000000, 64'h00000004_0001000c, 64'h00000004_00020018);
 
-  tb.peek(.addr(`HELLO_WORLD_REG_ADDR), .data(rdata), .size(DataSize::UINT16), .intf(AxiPort::PORT_OCL));         // start read & write
-  $display ("Reading 0x%x from address 0x%x", rdata, `HELLO_WORLD_REG_ADDR);
+  calc_dot_product (64'h00000004_00000040, 64'h00000004_00010004, 64'h00000004_00020028);
+  calc_dot_product (64'h00000004_00000080, 64'h00000004_00010008, 64'h00000004_00020030);
+  calc_dot_product (64'h00000004_000000c0, 64'h00000004_0001000c, 64'h00000004_00020038);
+  calc_dot_product (64'h00000004_00000100, 64'h00000004_00010010, 64'h00000004_00020038);
 
-  if (rdata == 32'hEFBE_ADDE) // Check for byte swap in register read
-    $display ("TEST PASSED");
-  else
-    $display ("TEST FAILED");
-
-
-  // // DDR 0
-    // // Compare the data in host memory with the expected data
-    // $display("[%t] : DMA buffer from DDR 0", $realtime);
-  // 
-  // host_memory_buffer_address = 64'h0_0001_0800;
-  // for (int i = 0 ; i<len0 ; i++) begin
-  //    if (tb.hm_get_byte(.addr(host_memory_buffer_address + i)) !== 8'hAA) begin
-  //       $display("[%t] : *** ERROR *** DDR0 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, (host_memory_buffer_address + i), tb.hm_get_byte(.addr(host_memory_buffer_address + i)));
-  //       error_count++;
-  //    end
-  // end
-  // 
-  // // DDR 1
-  // // Compare the data in host memory with the expected data
-  // $display("[%t] : DMA buffer from DDR 1", $realtime);
-  // 
-  // host_memory_buffer_address = 64'h0_0002_1800;
-  // for (int i = 0 ; i< len1 ; i++) begin
-  //    if (tb.hm_get_byte(.addr(host_memory_buffer_address)) !== 8'hBB) begin
-  //       $display("[%t] : *** ERROR *** DDR1 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, (host_memory_buffer_address + i), tb.hm_get_byte(.addr(host_memory_buffer_address + i)));
-  //       error_count++;
-  //    end
-  // end
-  // 
-  // // DDR 2
-  // // Compare the data in host memory with the expected data
-  // $display("[%t] : DMA buffer from DDR 2", $realtime);
-  // 
-  // host_memory_buffer_address = 64'h0_0003_2800;
-  // for (int i = 0 ; i< len2 ; i++) begin
-  //    if (tb.hm_get_byte(.addr(host_memory_buffer_address)) !== 8'hCC) begin
-  //       $display("[%t] : *** ERROR *** DDR2 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, (host_memory_buffer_address + i), tb.hm_get_byte(.addr(host_memory_buffer_address + i)));
-  //       error_count++;
-  //    end
-  // end
-  // 
-  // // DDR 3
-  // // Compare the data in host memory with the expected data
-  // $display("[%t] : DMA buffer from DDR 3", $realtime);
-  // 
-  // host_memory_buffer_address = 64'h0_0004_3800;
-  // for (int i = 0 ; i< len3 ; i++) begin
-  //    if (tb.hm_get_byte(.addr(host_memory_buffer_address)) !== 8'hDD) begin
-  //       $display("[%t] : *** ERROR *** DDR3 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, (host_memory_buffer_address + i), tb.hm_get_byte(.addr(host_memory_buffer_address + i)));
-  //       error_count++;
-  //    end
-  // end
-  // 
-  // tb.poke(.addr(64'h0), .data(64'h0000_0001), .size(DataSize::UINT64));
-  // tb.peek(.addr(64'h0), .data(rdata), .size(DataSize::UINT64));
-  // 
-  // if (rdata !== 64'h0000_0001) begin
-  //    $display("[%t] : *** ERROR *** DDR0 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, 64'h0000_0001, rdata);
-  //    error_count++;
-  // end
-  // 
-  // tb.poke(.addr(64'h0004_0000_0000), .data(64'h0000_0001), .size(DataSize::UINT64));
-  // tb.peek(.addr(64'h0004_0000_0000), .data(rdata), .size(DataSize::UINT64));
-  // 
-  // if (rdata !== 64'h0000_0001) begin
-  //    $display("[%t] : *** ERROR *** DDR1 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, 64'h0004_0000_0000, rdata);
-  //    error_count++;
-  // end
-  // 
-  // tb.poke(.addr(64'h0008_0000_0005), .data(64'h0000_0001), .size(DataSize::UINT64));
-  // tb.peek(.addr(64'h0008_0000_0005), .data(rdata), .size(DataSize::UINT64));
-  // 
-  // if (rdata !== 64'h0000_0001) begin
-  //    $display("[%t] : *** ERROR *** DDR2 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, 64'h0008_0000_0000, rdata);
-  //    error_count++;
-  // end
-  // 
-  // tb.poke(.addr(64'h000C_0000_0000), .data(64'h0000_0001), .size(DataSize::UINT64));
-  // tb.peek(.addr(64'h000C_0000_0000), .data(rdata), .size(DataSize::UINT64));
-  // 
-  // if (rdata !== 64'h0000_0001) begin
-  //    $display("[%t] : *** ERROR *** DDR3 Data mismatch, addr:%0x read data is: %0x",
-  //                $realtime, 64'h000C_0000_0000, rdata);
-  //    error_count++;
-  // end
-  
   // Power down
   #500ns;
   tb.power_down();
-
-  //---------------------------
-  // Report pass/fail status
-  //---------------------------
-  $display("[%t] : Checking total error count...", $realtime);
-  if (error_count > 0) begin
-    fail = 1;
-  end
-  $display("[%t] : Detected %3d errors during this test", $realtime, error_count);
-
-  if (fail || (tb.chk_prot_err_stat())) begin
-    $display("[%t] : *** TEST FAILED ***", $realtime);
-  end else begin
-    $display("[%t] : *** TEST PASSED ***", $realtime);
-  end
 
   $finish;
 end // initial begin
 
 endmodule // test_dram_hello
+
+
+task calc_dot_product (input logic [63: 0] mat1_addr,
+                       input logic [63: 0] mat2_addr,
+                       input logic [63: 0] dst_addr);
+
+logic [31: 0]                              matrix_finished;
+
+  import tb_type_defines_pkg::*;
+
+  $display ("Calculation Dot Product Start...");
+
+  // Set Matrix1 Address
+  tb.poke(.addr(32'h0510), .data(mat1_addr[31: 0]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+  tb.poke(.addr(32'h0514), .data(mat1_addr[63:32]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+
+  // Set Matrix2 Address
+  tb.poke(.addr(32'h0518), .data(mat2_addr[31: 0]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+  tb.poke(.addr(32'h051c), .data(mat2_addr[63:32]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+
+  // Set Destination Address
+  tb.poke(.addr(32'h0520), .data(dst_addr [31: 0]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+  tb.poke(.addr(32'h0524), .data(dst_addr [63:32]), .size(DataSize::UINT32), .intf(AxiPort::PORT_OCL)); // write register
+
+
+  tb.poke(.addr(`HELLO_WORLD_REG_ADDR), .data(32'hDEAD_BEEF), .size(DataSize::UINT16), .intf(AxiPort::PORT_OCL)); // write register
+
+  $display ("Write Finished. Reading ...");
+
+  matrix_finished = 0;
+
+  while (matrix_finished == 0) begin
+    tb.peek(.addr(`HELLO_WORLD_REG_ADDR), .data(matrix_finished), .size(DataSize::UINT16), .intf(AxiPort::PORT_OCL));         // start read & write
+    $display ("Reading 0x%x from address 0x%x", matrix_finished, `HELLO_WORLD_REG_ADDR);
+    #1us;
+  end
+endtask // calc_dot_product
