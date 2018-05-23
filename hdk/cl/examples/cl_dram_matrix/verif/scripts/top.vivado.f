@@ -71,3 +71,6 @@ ${CL_ROOT}/design/cl_sda_slv.sv
 ${CL_ROOT}/design/cl_dram_dma_axi_mstr.sv
 ${CL_ROOT}/design/cl_dram_dma.sv
 ${CL_ROOT}/design/fifo.sv
+
+${CL_ROOT}/design/cl_dram_matrix_calc.sv
+${CL_ROOT}/design/row_col_counter.sv
