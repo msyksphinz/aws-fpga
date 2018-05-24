@@ -1,4 +1,6 @@
+`ifdef VCS
 `default_nettype none
+`endif // VCS
 
 module cl_dram_matrix_calc
   (
@@ -18,33 +20,16 @@ localparam ar_wait_mat2   = 3'b111;
 logic [ 5: 0] ar_counter;
 logic         job_finished;
 
-logic [ 4: 0] ar_col_idx, ar_row_idx;
 logic [63: 0] mat1_addr, mat1_addr_init;
 logic [63: 0] mat2_addr, mat2_addr_init;
 logic [63: 0] dst_addr_init;
-
-logic         ar_update;
-
-row_col_counter
-  #(.col_width ( 5),
-    .row_width ( 5),
-    .col_size  (16),
-    .row_size  (16))
-u_ar_counter
-  (
-   .clk     (clk),
-   .rst_n   (rst_n),
-
-   .update  (ar_update),
-   .col_idx (ar_col_idx),
-   .row_idx (ar_row_idx)
-   );
 
 logic         axi_if_ar_fire; assign axi_if_ar_fire = axi_if.arvalid & axi_if.arready;
 logic         axi_if_r_fire;  assign axi_if_r_fire  = axi_if.rvalid  & axi_if.rready;
 logic         axi_if_aw_fire; assign axi_if_aw_fire = axi_if.awvalid & axi_if.awready;
 logic         axi_if_w_fire;  assign axi_if_w_fire  = axi_if.wvalid  & axi_if.wready;
 
+logic         ar_update;
 assign ar_update = (ar_state == ar_wait_mat2) && axi_if_ar_fire;
 
 always_ff @ (posedge clk) begin
@@ -183,16 +168,16 @@ always_ff @ (posedge clk) begin
 end // always_ff @
 
 
-logic [31: 0] matrix_row_data[15: 0];
-logic         matrix_col_val;
-logic [ 1: 0] rcv_state;
-logic [ 4: 0] rcv_count;
-logic [63: 0] mul_result;
+logic [511: 0] matrix_row_data;
+logic          matrix_col_val;
+logic [  1: 0] rcv_state;
+logic [  4: 0] rcv_count;
+logic [ 63: 0] mul_result;
 
-logic [ 4: 0] calc_count;
-logic [63: 0] dotp_result;
-logic [31: 0] matrix_row_data_in;
-logic         mult_vld;
+logic [  4: 0] calc_count;
+logic [ 63: 0] dotp_result;
+logic [ 31: 0] matrix_row_data_in;
+logic          mult_vld;
 
 assign job_finished = (calc_count == 16);
 
@@ -202,10 +187,8 @@ localparam rcv_state_store  = 2'b10;
 integer       idx;
 always_ff @ (posedge clk) begin
   if (!rst_n) begin
-    for (idx = 0; idx < 16; idx=idx+1) begin
-      matrix_row_data[idx] <= 32'h0000_0000;
-    end
-    matrix_col_val <= 1'b0;
+    matrix_row_data <= 512'h0;
+    matrix_col_val  <= 1'b0;
     rcv_state <= rcv_state_row;
     rcv_count <= 5'h00;
   end else begin
@@ -215,22 +198,7 @@ always_ff @ (posedge clk) begin
       case (rcv_state)
         rcv_state_row  : begin
           if (axi_if_r_fire) begin
-            matrix_row_data[ 0] <= axi_if.rdata[32* 0+31:32* 0];
-            matrix_row_data[ 1] <= axi_if.rdata[32* 1+31:32* 1];
-            matrix_row_data[ 2] <= axi_if.rdata[32* 2+31:32* 2];
-            matrix_row_data[ 3] <= axi_if.rdata[32* 3+31:32* 3];
-            matrix_row_data[ 4] <= axi_if.rdata[32* 4+31:32* 4];
-            matrix_row_data[ 5] <= axi_if.rdata[32* 5+31:32* 5];
-            matrix_row_data[ 6] <= axi_if.rdata[32* 6+31:32* 6];
-            matrix_row_data[ 7] <= axi_if.rdata[32* 7+31:32* 7];
-            matrix_row_data[ 8] <= axi_if.rdata[32* 8+31:32* 8];
-            matrix_row_data[ 9] <= axi_if.rdata[32* 9+31:32* 9];
-            matrix_row_data[10] <= axi_if.rdata[32*10+31:32*10];
-            matrix_row_data[11] <= axi_if.rdata[32*11+31:32*11];
-            matrix_row_data[12] <= axi_if.rdata[32*12+31:32*12];
-            matrix_row_data[13] <= axi_if.rdata[32*13+31:32*13];
-            matrix_row_data[14] <= axi_if.rdata[32*14+31:32*14];
-            matrix_row_data[15] <= axi_if.rdata[32*15+31:32*15];
+            matrix_row_data <= axi_if.rdata;
 
             rcv_state <= rcv_state_col;
             rcv_count <= 5'h00;
@@ -262,23 +230,7 @@ logic [63: 0] fifo_rd_data;
 assign axi_if.rready = !fifo_full;
 
 logic [31: 0] rdata_selected_32;
-assign rdata_selected_32 = (mat2_addr_init[5:2] == 4'h0) ? axi_if.rdata[32* 0+31:32* 0] :
-                           (mat2_addr_init[5:2] == 4'h1) ? axi_if.rdata[32* 1+31:32* 1] :
-                           (mat2_addr_init[5:2] == 4'h2) ? axi_if.rdata[32* 2+31:32* 2] :
-                           (mat2_addr_init[5:2] == 4'h3) ? axi_if.rdata[32* 3+31:32* 3] :
-                           (mat2_addr_init[5:2] == 4'h4) ? axi_if.rdata[32* 4+31:32* 4] :
-                           (mat2_addr_init[5:2] == 4'h5) ? axi_if.rdata[32* 5+31:32* 5] :
-                           (mat2_addr_init[5:2] == 4'h6) ? axi_if.rdata[32* 6+31:32* 6] :
-                           (mat2_addr_init[5:2] == 4'h7) ? axi_if.rdata[32* 7+31:32* 7] :
-                           (mat2_addr_init[5:2] == 4'h8) ? axi_if.rdata[32* 8+31:32* 8] :
-                           (mat2_addr_init[5:2] == 4'h9) ? axi_if.rdata[32* 9+31:32* 9] :
-                           (mat2_addr_init[5:2] == 4'hA) ? axi_if.rdata[32*10+31:32*10] :
-                           (mat2_addr_init[5:2] == 4'hB) ? axi_if.rdata[32*11+31:32*11] :
-                           (mat2_addr_init[5:2] == 4'hC) ? axi_if.rdata[32*12+31:32*12] :
-                           (mat2_addr_init[5:2] == 4'hD) ? axi_if.rdata[32*13+31:32*13] :
-                           (mat2_addr_init[5:2] == 4'hE) ? axi_if.rdata[32*14+31:32*14] :
-                           (mat2_addr_init[5:2] == 4'hF) ? axi_if.rdata[32*15+31:32*15] :
-                           32'h0000_0000;
+assign rdata_selected_32 = select32bitFrom512 (mat2_addr_init[5:2], axi_if.rdata);
 
 fifo u_input_fifo
 (
@@ -319,28 +271,7 @@ always_ff @ (posedge clk) begin
 end // always_ff @
 
 
-always_comb begin
-  case (calc_count)
-    4'd00   : matrix_row_data_in = matrix_row_data[ 0];
-    4'd01   : matrix_row_data_in = matrix_row_data[ 1];
-    4'd02   : matrix_row_data_in = matrix_row_data[ 2];
-    4'd03   : matrix_row_data_in = matrix_row_data[ 3];
-    4'd04   : matrix_row_data_in = matrix_row_data[ 4];
-    4'd05   : matrix_row_data_in = matrix_row_data[ 5];
-    4'd06   : matrix_row_data_in = matrix_row_data[ 6];
-    4'd07   : matrix_row_data_in = matrix_row_data[ 7];
-    4'd08   : matrix_row_data_in = matrix_row_data[ 8];
-    4'd09   : matrix_row_data_in = matrix_row_data[ 9];
-    4'd10   : matrix_row_data_in = matrix_row_data[10];
-    4'd11   : matrix_row_data_in = matrix_row_data[11];
-    4'd12   : matrix_row_data_in = matrix_row_data[12];
-    4'd13   : matrix_row_data_in = matrix_row_data[13];
-    4'd14   : matrix_row_data_in = matrix_row_data[14];
-    4'd15   : matrix_row_data_in = matrix_row_data[15];
-    default : matrix_row_data_in = 32'h0000_0000;
-  endcase // case (calc_count)
-end // always_comb
-
+assign matrix_row_data_in = select32bitFrom512 (calc_count, matrix_row_data);
 
 assign mul_result = {{32{matrix_row_data_in[31]}}, matrix_row_data_in} *
                     {{32{fifo_rd_data[31]}},       fifo_rd_data      };
@@ -431,4 +362,29 @@ end // always @ (negedge clk)
 
 endmodule // cl_dram_matrix_calc
 
+function logic [31: 0] select32bitFrom512 (input [  3: 0] idx,
+                                           input [512: 0] input_bit);
+  return (idx == 4'h0) ? input_bit[32* 0+31:32* 0] :
+         (idx == 4'h1) ? input_bit[32* 1+31:32* 1] :
+         (idx == 4'h2) ? input_bit[32* 2+31:32* 2] :
+         (idx == 4'h3) ? input_bit[32* 3+31:32* 3] :
+         (idx == 4'h4) ? input_bit[32* 4+31:32* 4] :
+         (idx == 4'h5) ? input_bit[32* 5+31:32* 5] :
+         (idx == 4'h6) ? input_bit[32* 6+31:32* 6] :
+         (idx == 4'h7) ? input_bit[32* 7+31:32* 7] :
+         (idx == 4'h8) ? input_bit[32* 8+31:32* 8] :
+         (idx == 4'h9) ? input_bit[32* 9+31:32* 9] :
+         (idx == 4'hA) ? input_bit[32*10+31:32*10] :
+         (idx == 4'hB) ? input_bit[32*11+31:32*11] :
+         (idx == 4'hC) ? input_bit[32*12+31:32*12] :
+         (idx == 4'hD) ? input_bit[32*13+31:32*13] :
+         (idx == 4'hE) ? input_bit[32*14+31:32*14] :
+         (idx == 4'hF) ? input_bit[32*15+31:32*15] :
+         32'h0000_0000;
+
+endfunction // select32bitFrom512
+
+
+`ifdef VCS
 `default_nettype wire
+`endif // VCS

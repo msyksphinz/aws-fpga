@@ -1,4 +1,4 @@
-`default_nettype none
+// `default_nettype none
 
 // Amazon FPGA Hardware Development Kit
 //
@@ -809,4 +809,4 @@ cl_vio CL_VIO (
 
 endmodule
 
-`default_nettype wire
+// `default_nettype wire

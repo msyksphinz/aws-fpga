@@ -1,4 +1,6 @@
+`ifdef VCS
 `default_nettype none
+`endif // VCS
 
 module row_col_counter
   #(
@@ -38,4 +40,6 @@ end // always_ff @
 
 endmodule // row_col_counter
 
+`ifdef VCS
 `default_nettype wire
+`endif // VCS
