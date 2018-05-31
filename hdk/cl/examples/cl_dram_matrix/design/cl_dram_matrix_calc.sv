@@ -7,7 +7,9 @@ module cl_dram_matrix_calc
    input logic      clk,
    input logic      rst_n,
    axi_bus_t.slave  axi_if,
-   cfg_bus_t.master cfg_if
+   cfg_bus_t.master cfg_if,
+
+   output logic     matrix_calc_done
    );
 
 logic [ 2: 0]       ar_state;
@@ -18,7 +20,7 @@ localparam ar_req_mat2    = 3'b110;
 localparam ar_wait_mat2   = 3'b111;
 
 logic [ 5: 0] ar_counter;
-logic         job_finished;
+logic         is_job_finished;
 
 logic [63: 0] mat1_addr, mat1_addr_init;
 logic [63: 0] mat2_addr, mat2_addr_init;
@@ -52,7 +54,7 @@ always_ff @ (posedge clk) begin
     cfg_if.rdata <= 32'h0000_0000;
   end else begin
 	if (cfg_if.rd || cfg_if.wr) begin
-      cfg_if.rdata <= job_finished;
+      cfg_if.rdata <= is_job_finished;
       cfg_if.ack   <= 1'b1;
     end else begin
       cfg_if.ack   <= 1'b0;
@@ -179,8 +181,6 @@ logic [ 63: 0] dotp_result;
 logic [ 31: 0] matrix_row_data_in;
 logic          mult_vld;
 
-assign job_finished = (calc_count == 16);
-
 localparam rcv_state_row    = 2'b00;
 localparam rcv_state_col    = 2'b01;
 localparam rcv_state_store  = 2'b10;
@@ -246,21 +246,25 @@ fifo u_input_fifo
 
 always_ff @ (posedge clk) begin
   if (!rst_n) begin
-    dotp_result <= 64'h0;
-    calc_count <= 5'h00;
-    mult_vld  <= 1'b0;
+    dotp_result     <= 64'h0;
+    calc_count      <= 5'h00;
+    mult_vld        <= 1'b0;
+    is_job_finished <= 1'b0;
   end else begin
     if (cfg_if.wr && cfg_if.addr[ 7: 0] == 8'h00) begin
       dotp_result <= 64'h0;
       calc_count  <= 5'h00;
       mult_vld    <= 1'b0;
+      is_job_finished <= 1'b0;
     end else begin
       if (!fifo_empty) begin
         dotp_result <= dotp_result + mul_result;
-        calc_count  <= calc_count  + 5'h01;
         if (calc_count == 15) begin
-          mult_vld    <= 1'b1;
+          calc_count      <= 0;
+          mult_vld        <= 1'b1;
+          is_job_finished <= 1'b1;
         end else begin
+          calc_count  <= calc_count  + 5'h01;
           mult_vld    <= 1'b0;
         end
       end else begin
@@ -269,6 +273,19 @@ always_ff @ (posedge clk) begin
     end // else: !if(cfg_if.wr && cfg_if.addr[ 7: 0] == 8'h00)
   end // else: !if(!rst_n)
 end // always_ff @
+
+
+always_ff @ (posedge clk) begin
+  if (!rst_n) begin
+    matrix_calc_done <= 1'b0;
+  end else begin
+    if (!fifo_empty && (calc_count == 15)) begin
+      matrix_calc_done <= 1'b1;
+    end else begin
+      matrix_calc_done <= 1'b0;
+    end
+  end
+end
 
 
 assign matrix_row_data_in = select32bitFrom512 (calc_count, matrix_row_data);

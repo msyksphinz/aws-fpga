@@ -25,20 +25,20 @@ uint8_t host_memory_getc(uint64_t addr)
 {
   return *(uint8_t *)addr;
 }
-void cosim_printf(const char *format, ...) 
-{                                        
-  static char sv_msg_buffer[256];        
-  va_list args;                          
+void cosim_printf(const char *format, ...)
+{
+  static char sv_msg_buffer[256];
+  va_list args;
 
-  va_start(args, format);                
-  vsprintf(sv_msg_buffer, format, args); 
+  va_start(args, format);
+  vsprintf(sv_msg_buffer, format, args);
 #ifdef SV_TEST
-  sv_printf(sv_msg_buffer);                
+  sv_printf(sv_msg_buffer);
 #else
-  printf(sv_msg_buffer); 
+  printf(sv_msg_buffer);
 #endif
 
-  va_end(args);                          
+  va_end(args);
 }
 
 void int_handler(uint32_t int_num)
@@ -52,7 +52,7 @@ void int_handler(uint32_t int_num)
   #endif
 #endif
 
-  cosim_printf("Received interrupt %2d", int_num);
+  cosim_printf("Sample Received interrupt %2d", int_num);
 
 #ifdef SV_TEST
   sv_int_ack(int_num);

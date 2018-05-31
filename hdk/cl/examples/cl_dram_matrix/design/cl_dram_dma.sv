@@ -294,13 +294,17 @@ cl_dma_pcis_slv #(.SCRB_BURST_LEN_MINUS1(DDR_SCRB_BURST_LEN_MINUS1),
   );
 
 
+logic w_matrix_calc_done;
+
 cl_dram_matrix_calc
   u_cl_dram_matrix_calc
     (
      .clk    (clk),
      .rst_n  (dma_pcis_slv_sync_rst_n),
      .axi_if (cl_axi_mstr_bus),
-     .cfg_if (axi_mstr_cfg_bus)
+     .cfg_if (axi_mstr_cfg_bus),
+
+     .matrix_calc_done (w_matrix_calc_done)
      );
 
 
@@ -677,15 +681,15 @@ sh_ddr #(
 
 (* dont_touch = "true" *) logic int_slv_sync_rst_n;
 lib_pipe #(.WIDTH(1), .STAGES(4)) INT_SLV_SLC_RST_N (.clk(clk), .rst_n(1'b1), .in_bus(sync_rst_n), .out_bus(int_slv_sync_rst_n));
-cl_int_slv CL_INT_TST
+cl_int_matrix_calc u_cl_int_matrix_calc
 (
   .clk                 (clk),
   .rst_n               (int_slv_sync_rst_n),
 
-  .cfg_bus             (int_tst_cfg_bus),
+  .matrix_calc_done    (w_matrix_calc_done),
 
-  .cl_sh_apppf_irq_req (cl_sh_apppf_irq_req),
-  .sh_cl_apppf_irq_ack (sh_cl_apppf_irq_ack)
+  .cl_sh_irq_req (cl_sh_apppf_irq_req),
+  .sh_cl_irq_ack (sh_cl_apppf_irq_ack)
 
 );
 
